@@ -1,26 +1,62 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* 主色：明亮湖水藍；輔色：暖橘（水果色）。要換配色只改這裡 */
+@theme {
+  --color-brand-50: #eefbfd;
+  --color-brand-100: #d4f3f9;
+  --color-brand-200: #ade7f3;
+  --color-brand-300: #74d4ea;
+  --color-brand-400: #34b8d8;
+  --color-brand-500: #189cbe;
+  --color-brand-600: #167ea0;
+  --color-brand-700: #186683;
+  --color-brand-800: #1c546c;
+  --color-brand-900: #1c465b;
+  --color-brand-950: #0d2d3d;
+
+  --color-accent-50: #fff7ed;
+  --color-accent-100: #ffedd5;
+  --color-accent-400: #fb923c;
+  --color-accent-500: #f97316;
+  --color-accent-600: #ea580c;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-geist-sans), "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* 放大整體字級（Tailwind 的尺寸都以 rem 計算，會一起等比例放大） */
+html {
+  font-size: 17px;
+  /* 一律用明亮風格：日期選擇器、下拉選單等原生元件不跟著系統深色模式變黑 */
+  color-scheme: light;
+}
+@media (min-width: 1024px) {
+  html {
+    font-size: 18px;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #f3f7fa;
+  color: #0f172a;
+  font-family: var(--font-sans);
+}
+
+/* 列印時只印出 .print-area（宅配單） */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
 }
