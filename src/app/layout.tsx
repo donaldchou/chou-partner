@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "周家夥伴平台 CHOU Partner",
+  title: "CHOU 農場平台｜客戶管理系統",
   description: "農場客戶、旅行社採果、團購業者管理平台",
 };
 

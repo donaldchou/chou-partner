@@ -17,6 +17,7 @@ import {
   Tabs,
   useDebounced,
 } from "@/components/ui";
+import { CodeGate, UnlockTimer } from "@/components/unlock";
 import { api, useMe } from "@/lib/store";
 import { useFetch } from "@/lib/use-fetch";
 import { cn } from "@/lib/utils";
@@ -35,16 +36,18 @@ export default function AdminPage() {
   const [tab, setTab] = useState<"users" | "data">("users");
   return (
     <div>
-      <PageHeader title="後台管理" subtitle="帳號與身分、所有資料的檢視與刪除（只有管理者看得到）" />
-      <Tabs
-        value={tab}
-        onChange={setTab}
-        tabs={[
-          { value: "users", label: "使用者管理" },
-          { value: "data", label: "所有資料" },
-        ]}
-      />
-      {tab === "users" ? <UsersPanel /> : <DataPanel />}
+      <PageHeader title="後台管理" subtitle="帳號與身分、所有資料的檢視與刪除（只有管理者看得到，需要驗證碼）" info={<UnlockTimer />} />
+      <CodeGate>
+        <Tabs
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            { value: "users", label: "使用者管理" },
+            { value: "data", label: "所有資料" },
+          ]}
+        />
+        {tab === "users" ? <UsersPanel /> : <DataPanel />}
+      </CodeGate>
     </div>
   );
 }

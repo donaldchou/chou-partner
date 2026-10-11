@@ -59,8 +59,8 @@ export default function LoginPage() {
             <Citrus size={26} />
           </span>
           <div>
-            <h1 className="text-xl font-bold text-slate-800">周家夥伴平台</h1>
-            <p className="text-sm text-slate-400">CHOU Partner 登入</p>
+            <h1 className="text-xl font-bold text-slate-800">CHOU 農場平台</h1>
+            <p className="text-sm text-slate-400">客戶管理系統</p>
           </div>
         </div>
         <Suspense>

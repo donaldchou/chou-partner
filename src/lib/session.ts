@@ -46,3 +46,41 @@ export const sessionCookie = (token: string) => ({
   path: "/",
   maxAge: SESSION_DAYS * 24 * 60 * 60,
 });
+
+/* ---------------- 驗證碼解鎖：輸入一次驗證碼，1 小時內不用再輸入 ---------------- */
+export const UNLOCK_COOKIE = "chou_partner_unlock";
+export const UNLOCK_MINUTES = 60;
+
+/** 綁定登入者的解鎖憑證，回傳 token 與到期時間（毫秒） */
+export async function signUnlock(userId: string) {
+  const exp = Math.floor((Date.now() + UNLOCK_MINUTES * 60 * 1000) / 1000);
+  const token = await new SignJWT({ purpose: "unlock" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(userId)
+    .setIssuedAt()
+    .setExpirationTime(exp)
+    .sign(secret());
+  return { token, expiresAt: exp * 1000 };
+}
+
+/** 解鎖憑證有效（同一個使用者、還沒過期）時回傳到期時間（毫秒），否則 null */
+export async function verifyUnlock(token: string | undefined, userId: string): Promise<number | null> {
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] });
+    if (payload.purpose !== "unlock" || payload.sub !== userId || !payload.exp) return null;
+    return payload.exp * 1000;
+  } catch {
+    return null;
+  }
+}
+
+export const unlockCookie = (token: string) => ({
+  name: UNLOCK_COOKIE,
+  value: token,
+  httpOnly: true,
+  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production",
+  path: "/",
+  maxAge: UNLOCK_MINUTES * 60,
+});

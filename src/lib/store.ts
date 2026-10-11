@@ -34,6 +34,8 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
     window.location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
   }
   const data = await res.json().catch(() => ({}));
+  // 驗證碼解鎖過期：切回需要驗證碼，頁面會重新顯示輸入框
+  if (res.status === 423 && data.needCode) setUnlock(null);
   if (!res.ok) throw Object.assign(new Error(data.error ?? `HTTP ${res.status}`), { status: res.status, data });
   return data as T;
 }
@@ -218,4 +220,50 @@ export async function logout() {
   // 整頁重新載入，清掉記憶體裡的資料
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination
   window.location.href = "/login";
+}
+
+/* ---------------- 驗證碼解鎖（輸入一次，1 小時內免輸入） ---------------- */
+let unlockUntil: number | null = null; // 到期時間（毫秒）
+let unlockLoaded = false;
+const unlockListeners = new Set<() => void>();
+let unlockTimer: ReturnType<typeof setTimeout> | undefined;
+
+function setUnlock(expiresAt: number | null) {
+  unlockUntil = expiresAt && expiresAt > Date.now() ? expiresAt : null;
+  clearTimeout(unlockTimer);
+  // 到期時自動切回「需要驗證碼」
+  if (unlockUntil) unlockTimer = setTimeout(() => setUnlock(null), unlockUntil - Date.now());
+  unlockListeners.forEach((l) => l());
+}
+
+async function loadUnlock() {
+  unlockLoaded = true;
+  try {
+    setUnlock((await api<{ expiresAt: number | null }>("/api/unlock")).expiresAt);
+  } catch {
+    setUnlock(null);
+  }
+}
+
+/** 解鎖到期時間（毫秒）；沒有解鎖是 null；還沒問過伺服器是 undefined */
+export function useUnlock(): number | null | undefined {
+  return useSyncExternalStore(
+    (l) => {
+      unlockListeners.add(l);
+      if (!unlockLoaded) void loadUnlock();
+      return () => unlockListeners.delete(l);
+    },
+    () => (unlockLoaded ? unlockUntil : undefined),
+    () => undefined,
+  );
+}
+
+export async function unlock(code: string) {
+  const { expiresAt } = await api<{ expiresAt: number }>("/api/unlock", { method: "POST", body: JSON.stringify({ code }) });
+  setUnlock(expiresAt);
+}
+
+export async function lockNow() {
+  await api("/api/unlock", { method: "DELETE" });
+  setUnlock(null);
 }

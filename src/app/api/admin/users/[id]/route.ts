@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { handleError, readJson } from "@/lib/api";
 import { requireAdmin } from "@/lib/auth";
+import { requireUnlocked } from "@/lib/unlock";
 import { deleteUser, updateUser } from "@/lib/admin-users";
 
 type Ctx = RouteContext<"/api/admin/users/[id]">;
@@ -9,6 +10,7 @@ type Ctx = RouteContext<"/api/admin/users/[id]">;
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   try {
     const me = await requireAdmin();
+    await requireUnlocked(me);
     return NextResponse.json(await updateUser((await ctx.params).id, await readJson(req), me));
   } catch (err) {
     return handleError(err);
@@ -19,6 +21,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 export async function DELETE(_req: NextRequest, ctx: Ctx) {
   try {
     const me = await requireAdmin();
+    await requireUnlocked(me);
     await deleteUser((await ctx.params).id, me);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
