@@ -1,10 +1,10 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import type { Agency, AppState, Booking, Customer, GroupBuy } from "./types";
+import type { Agency, AppState, Booking, Customer, GroupBuy, Order, Product } from "./types";
 
 // 前端資料快取：啟動時從 /api/db 載入，寫入時先更新畫面（樂觀更新）再送到後端。
-const EMPTY: AppState = { customers: [], agencies: [], bookings: [], groupBuys: [] };
+const EMPTY: AppState = { products: [], agencies: [], bookings: [], groupBuys: [] };
 
 export type DBStatus = "idle" | "loading" | "ready" | "error";
 
@@ -75,12 +75,6 @@ export function useLoaded() {
   return useDBStatus().status === "ready";
 }
 
-/** 資料庫完全沒有資料時，放入示範資料 */
-export async function loadDemo() {
-  await api("/api/seed", { method: "POST" });
-  await reload();
-}
-
 /* ---------------- 寫入：先改畫面，再送到後端；失敗時提示並重新載入 ---------------- */
 
 type Coll = keyof AppState;
@@ -117,8 +111,7 @@ function remove<K extends Coll>(key: K, id: string, query = "") {
 const quiet = (p: Promise<unknown>) => void p.catch(() => {});
 
 export const actions = {
-  saveCustomer: (c: Customer) => quiet(save("customers", c)),
-  deleteCustomer: (id: string) => quiet(remove("customers", id)),
+  saveProduct: (p: Product) => quiet(save("products", p)),
 
   // 後端會把被移除的領隊／司機從預約裡清掉，存完重新載入預約
   saveAgency: (a: Agency) => quiet(save("agencies", a).then(reload)),
@@ -133,3 +126,50 @@ export const actions = {
   saveGroupBuy: (g: GroupBuy) => quiet(save("groupBuys", g)),
   deleteGroupBuy: (id: string) => quiet(remove("groupBuys", id)),
 };
+
+/* ---------------- 客戶與訂單：資料量大，用分頁 API，不放進全域快取 ---------------- */
+
+export interface Page<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export type OrderBrief = Pick<Order, "id" | "orderNo" | "orderedAt" | "season" | "channel" | "status" | "items" | "amounts">;
+export type CustomerWithOrders = Customer & { orders: Order[] };
+export type OrderWithCustomer = Order & { customer: Customer | null };
+
+const qs = (params: Record<string, string | number | undefined>) =>
+  new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== "") as [string, string][]).toString();
+
+export const customersApi = {
+  list: (params: Record<string, string | number | undefined>) =>
+    api<Page<Customer & { orders?: OrderBrief[] }>>(`/api/customers?${qs(params)}`),
+  get: (id: string) => api<CustomerWithOrders>(`/api/customers/${encodeURIComponent(id)}`),
+  save: (c: Customer) => api<Customer>(`/api/customers/${encodeURIComponent(c.id)}`, { method: "PUT", body: JSON.stringify(c) }),
+  remove: (id: string, cascade = false) =>
+    api(`/api/customers/${encodeURIComponent(id)}${cascade ? "?cascade=true" : ""}`, { method: "DELETE" }),
+  merge: (into: string, from: string) =>
+    api<CustomerWithOrders>(`/api/customers/${encodeURIComponent(into)}/merge`, { method: "POST", body: JSON.stringify({ from }) }),
+};
+
+export const ordersApi = {
+  list: (params: Record<string, string | number | undefined>) => api<Page<Order> & { amount: number }>(`/api/orders?${qs(params)}`),
+  get: (id: string) => api<OrderWithCustomer>(`/api/orders/${encodeURIComponent(id)}`),
+  save: (o: Order) => api<Order>(`/api/orders/${encodeURIComponent(o.id)}`, { method: "PUT", body: JSON.stringify(o) }),
+  remove: (id: string) => api(`/api/orders/${encodeURIComponent(id)}`, { method: "DELETE" }),
+};
+
+export interface DashboardStats {
+  season: number;
+  seasons: number[];
+  customers: number;
+  repeatCustomers: number;
+  needsReview: number;
+  pendingOrders: number;
+  unpaidOrders: number;
+  bySeason: { season: number; orders: number; amount: number }[];
+  byChannel: { channel: string; orders: number; amount: number }[];
+}
+export const statsApi = { get: () => api<DashboardStats>("/api/stats") };

@@ -4,11 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useState, useSyncExternalStore } from "react";
 import {
+  AlertTriangle,
   Bus,
   ChevronsLeft,
   ChevronsRight,
   Citrus,
+  FilePlus2,
   FileUp,
+  ReceiptText,
   LayoutDashboard,
   ListOrdered,
   Menu,
@@ -31,6 +34,14 @@ const NAV = [
       { href: "/customers", label: "客戶查詢", icon: Search },
       { href: "/customers/new", label: "客戶建檔", icon: UserPlus },
       { href: "/customers/import", label: "歷史紀錄匯入", icon: FileUp },
+    ],
+  },
+  {
+    group: "訂單管理",
+    items: [
+      { href: "/orders", label: "訂單列表", icon: ReceiptText },
+      { href: "/orders/new", label: "新增訂單", icon: FilePlus2 },
+      { href: "/orders?review=1", label: "待確認訂單", icon: AlertTriangle },
     ],
   },
   {

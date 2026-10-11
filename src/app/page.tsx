@@ -1,42 +1,66 @@
 "use client";
 
 import Link from "next/link";
-import { Bus, CalendarPlus, ClipboardList, IdCard, Search, ShoppingBag, Truck, Users } from "lucide-react";
-import { Badge, Button, Card, Empty, PageHeader, SectionTitle } from "@/components/ui";
-import { useState } from "react";
-import { loadDemo, useAppState, useLoaded } from "@/lib/store";
+import { AlertTriangle, Banknote, CalendarPlus, ClipboardList, IdCard, ListOrdered, Search, ShoppingBag, Users } from "lucide-react";
+import { Badge, Card, Empty, PageHeader, SectionTitle } from "@/components/ui";
+import { statsApi, useAppState } from "@/lib/store";
+import { useFetch } from "@/lib/use-fetch";
 import { formatDateTime, money, today, weekday } from "@/lib/utils";
 import { groupBuyTotal } from "@/lib/calc";
 
 const QUICK = [
   { href: "/customers/new", icon: IdCard, label: "名片建檔", desc: "拍名片新增客戶", tint: "bg-brand-100 text-brand-700" },
   { href: "/customers", icon: Search, label: "客戶查詢", desc: "找客戶、看訂購紀錄", tint: "bg-violet-100 text-violet-700" },
+  { href: "/orders/new", icon: ListOrdered, label: "新增訂單", desc: "電話／LINE 訂單", tint: "bg-sky-100 text-sky-700" },
   { href: "/tours/bookings/new", icon: CalendarPlus, label: "新增採果預約", desc: "旅行社團體預約", tint: "bg-accent-100 text-accent-600" },
   { href: "/group-buys/new", icon: ShoppingBag, label: "新增團購", desc: "建立團購合作", tint: "bg-emerald-100 text-emerald-700" },
 ];
 
 export default function Dashboard() {
-  const { customers, agencies, bookings, groupBuys } = useAppState();
+  const { agencies, bookings, groupBuys } = useAppState();
+  const { data: s } = useFetch("stats", () => statsApi.get());
+  const current = s?.bySeason.find((x) => x.season === s.season);
   const now = today();
 
   const upcoming = bookings
     .filter((b) => b.status === "已預約" && b.datetime.slice(0, 10) >= now)
     .sort((a, b) => a.datetime.localeCompare(b.datetime));
   const activeGb = groupBuys.filter((g) => g.status === "洽談中" || g.status === "進行中");
-  const upcomingPeople = upcoming.reduce((s, b) => s + b.headcount, 0);
 
   const stats = [
-    { label: "客戶總數", value: customers.length, unit: "位", href: "/customers", icon: Users },
-    { label: "合作旅行社", value: agencies.length, unit: "家", href: "/tours/agencies", icon: Bus },
-    { label: "待到場團體", value: upcoming.length, unit: `團 / ${upcomingPeople} 人`, href: "/tours/bookings", icon: ClipboardList },
-    { label: "進行中團購", value: activeGb.length, unit: "檔", href: "/group-buys", icon: Truck },
+    {
+      label: "客戶總數",
+      value: s?.customers.toLocaleString() ?? "…",
+      unit: `回購客 ${s?.repeatCustomers.toLocaleString() ?? "…"} 位`,
+      href: "/customers",
+      icon: Users,
+    },
+    {
+      label: `${s?.season ?? ""} 產季營收`,
+      value: current ? money(current.amount) : "…",
+      unit: `${current?.orders.toLocaleString() ?? "…"} 張訂單`,
+      href: `/orders?season=${s?.season ?? ""}`,
+      icon: Banknote,
+    },
+    {
+      label: "待處理訂單",
+      value: s?.pendingOrders.toLocaleString() ?? "…",
+      unit: `待匯款 ${s?.unpaidOrders ?? "…"} 張`,
+      href: "/orders",
+      icon: ClipboardList,
+    },
+    {
+      label: "待確認的匯入訂單",
+      value: s?.needsReview.toLocaleString() ?? "…",
+      unit: "對照原文核對",
+      href: "/orders?review=1",
+      icon: AlertTriangle,
+    },
   ];
 
   return (
     <div>
       <PageHeader title="早安，今天的農場概況" subtitle={`${now.replaceAll("-", "/")}（${weekday(now)}）`} />
-
-      <EmptyDB />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map((s) => (
@@ -46,14 +70,14 @@ export default function Dashboard() {
                 {s.label}
                 <s.icon size={20} className="text-brand-500" />
               </div>
-              <div className="mt-1 text-3xl font-bold text-slate-900">{s.value}</div>
+              <div className="mt-1 whitespace-nowrap text-2xl font-bold text-slate-900 xl:text-3xl">{s.value}</div>
               <div className="text-xs text-slate-400">{s.unit}</div>
             </Card>
           </Link>
         ))}
       </div>
 
-      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-5">
         {QUICK.map((q) => (
           <Link
             key={q.href}
@@ -71,7 +95,53 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-3">
+        <Card>
+          <SectionTitle
+            right={
+              <Link href="/orders" className="text-sm text-brand-700 hover:underline">
+                訂單 →
+              </Link>
+            }
+          >
+            📈 各產季訂單
+          </SectionTitle>
+          {!s ? (
+            <Empty>載入中…</Empty>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-400">
+                  <th className="pb-1 font-medium">產季</th>
+                  <th className="pb-1 text-right font-medium">訂單</th>
+                  <th className="pb-1 text-right font-medium">營收</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...s.bySeason]
+                  .reverse()
+                  .slice(0, 8)
+                  .map((r) => (
+                    <tr key={r.season} className="border-t border-slate-100">
+                      <td className="py-1.5">
+                        <Link href={`/orders?season=${r.season}`} className="text-brand-700 hover:underline">
+                          {r.season}
+                        </Link>
+                      </td>
+                      <td className="py-1.5 text-right text-slate-600">{r.orders.toLocaleString()}</td>
+                      <td className="py-1.5 text-right font-medium text-slate-800">{money(r.amount)}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          )}
+          {s && s.byChannel.length > 0 && (
+            <p className="mt-3 text-xs text-slate-500">
+              {s.season} 各通路：{s.byChannel.map((c) => `${c.channel} ${c.orders}`).join("、")}
+            </p>
+          )}
+        </Card>
+
         <Card>
           <SectionTitle
             right={
@@ -147,36 +217,5 @@ export default function Dashboard() {
         </Card>
       </div>
     </div>
-  );
-}
-
-/** 資料庫還沒有任何資料時，提供一鍵放入示範資料 */
-function EmptyDB() {
-  const loaded = useLoaded();
-  const { customers, agencies, bookings, groupBuys } = useAppState();
-  const [busy, setBusy] = useState(false);
-  if (!loaded || customers.length + agencies.length + bookings.length + groupBuys.length > 0) return null;
-  return (
-    <Card className="mb-5 flex flex-wrap items-center justify-between gap-3 border-brand-200 bg-brand-50">
-      <div>
-        <div className="font-semibold text-slate-800">資料庫目前是空的</div>
-        <div className="text-sm text-slate-500">可以直接開始建檔，或先放入示範資料體驗操作流程（之後可以逐筆刪除）。</div>
-      </div>
-      <Button
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            await loadDemo();
-          } catch (e) {
-            alert(e instanceof Error ? e.message : String(e));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        {busy ? "載入中…" : "放入示範資料"}
-      </Button>
-    </Card>
   );
 }

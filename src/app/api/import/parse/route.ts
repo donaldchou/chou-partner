@@ -1,26 +1,52 @@
 import { NextResponse } from "next/server";
-import { HttpError, handleError, readFile } from "@/lib/api";
-import { markExisting, parseDocx, parseMdb } from "@/lib/importer";
+import { handleError, readFile } from "@/lib/api";
+import { parseUpload } from "@/lib/legacy/from-upload";
+import { connectDB } from "@/lib/mongodb";
+import { OrderModel } from "@/models/order";
 
-const PREVIEW_LIMIT = 5000;
+const PREVIEW = 200;
 
 /**
- * POST /api/import/parse（multipart：file、kind = word | mdb、table = MDB 資料表名稱，可省略）
- * 解析檔案、標記既有客戶，回傳預覽列；不會寫入資料庫。
+ * POST /api/import/parse（multipart：file、kind = mdb | word）
+ * 解析檔案、檢查哪些已經匯入過，回傳統計與前 200 筆預覽；不會寫入資料庫。
  */
 export async function POST(req: Request) {
   try {
-    const { form, buffer } = await readFile(req, "file", 50 * 1024 * 1024);
-    const kind = form.get("kind");
-
-    let result: { rows: Awaited<ReturnType<typeof parseDocx>>["rows"]; ai?: boolean; tables?: unknown; table?: string };
-    if (kind === "word") result = await parseDocx(buffer);
-    else if (kind === "mdb") result = parseMdb(buffer, (form.get("table") as string | null) || undefined);
-    else throw new HttpError(400, "kind 必須是 word 或 mdb");
-
-    const total = result.rows.length;
-    const rows = await markExisting(result.rows.slice(0, PREVIEW_LIMIT));
-    return NextResponse.json({ ...result, rows, total, truncated: total > PREVIEW_LIMIT });
+    const { file, form, buffer } = await readFile(req, "file", 4 * 1024 * 1024);
+    const r = await parseUpload(form.get("kind"), file.name, buffer);
+    await connectDB();
+    const keys = r.orders.map((o) => o.legacy.key);
+    const existing = new Set(
+      (
+        (await OrderModel.find({ "legacy.key": { $in: keys } })
+          .select("legacy.key")
+          .lean()) as unknown as { legacy: { key: string } }[]
+      ).map((o) => o.legacy.key),
+    );
+    const fresh = r.orders.filter((o) => !existing.has(o.legacy.key));
+    return NextResponse.json({
+      kind: r.kind,
+      file: file.name,
+      total: r.orders.length,
+      existing: existing.size,
+      fresh: fresh.length,
+      needsReview: fresh.filter((o) => o.legacy.needsReview).length,
+      skipped: r.skipped,
+      products: r.products.length,
+      preview: fresh.slice(0, PREVIEW).map((o) => ({
+        key: o.legacy.key,
+        orderNo: o.orderNo,
+        channel: o.channel,
+        orderedAt: o.orderedAt,
+        buyer: o.buyer,
+        address: o.shipments[0]?.recipient.address ?? "",
+        shipments: o.shipments.length,
+        items: o.items,
+        total: o.items.reduce((s, i) => s + i.qty * i.unitPrice, 0) + o.amounts.shipping + o.amounts.adjust + o.payment.codFee,
+        needsReview: o.legacy.needsReview,
+        reasons: o.legacy.reviewReasons ?? [],
+      })),
+    });
   } catch (err) {
     return handleError(err);
   }

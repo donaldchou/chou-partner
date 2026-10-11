@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
-import { ArrowLeft, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function PageHeader({
@@ -33,9 +33,9 @@ export function PageHeader({
 }
 
 export function Card({ className, children }: { className?: string; children: React.ReactNode }) {
-  return (
-    <div className={cn("rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm shadow-slate-200/60", className)}>{children}</div>
-  );
+  // 外部有指定內距（例如 p-0、p-4）時不加預設的 p-5，避免兩個 class 互相衝突
+  const pad = /(^|\s)p-\d/.test(className ?? "") ? "" : "p-5";
+  return <div className={cn("rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-200/60", pad, className)}>{children}</div>;
 }
 
 export function SectionTitle({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
@@ -98,19 +98,21 @@ export function LinkButton({
   );
 }
 
+// 外部有指定寬度（例如 w-auto、w-44）時不加 w-full
+const widthOf = (className?: string) => (/(^|\s)(sm:|md:|lg:)?w-/.test(className ?? "") ? "" : "w-full");
 const inputCls =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20";
+  "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20";
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={cn(inputCls, props.className)} />;
+  return <input {...props} className={cn(inputCls, widthOf(props.className), props.className)} />;
 }
 
 export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea rows={3} {...props} className={cn(inputCls, props.className)} />;
+  return <textarea rows={3} {...props} className={cn(inputCls, "w-full", props.className)} />;
 }
 
 export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...props} className={cn(inputCls, props.className)} />;
+  return <select {...props} className={cn(inputCls, widthOf(props.className), props.className)} />;
 }
 
 export function Field({
@@ -251,5 +253,54 @@ export function DemoNote({ children }: { children: React.ReactNode }) {
       <span className="font-semibold">展示模式：</span>
       {children}
     </p>
+  );
+}
+
+/** 分頁：« 上一頁　第 3 / 120 頁（共 2,380 筆）　下一頁 » */
+export function Pagination({
+  page,
+  limit,
+  total,
+  onChange,
+}: {
+  page: number;
+  limit: number;
+  total: number;
+  onChange: (page: number) => void;
+}) {
+  const pages = Math.max(1, Math.ceil(total / limit));
+  if (total <= limit) return null;
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-sm text-slate-600">
+      <Button variant="secondary" disabled={page <= 1} onClick={() => onChange(page - 1)}>
+        <ChevronLeft size={16} /> 上一頁
+      </Button>
+      <span>
+        第 {page} / {pages} 頁（共 {total.toLocaleString()} 筆）
+      </span>
+      <Button variant="secondary" disabled={page >= pages} onClick={() => onChange(page + 1)}>
+        下一頁 <ChevronRight size={16} />
+      </Button>
+    </div>
+  );
+}
+
+/** 輸入停下來一段時間才更新（搜尋框用，避免每打一個字就查一次） */
+export function useDebounced<T>(value: T, ms = 350) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
+/** 載入中的區塊 */
+export function Spinner({ text = "載入中…" }: { text?: string }) {
+  return (
+    <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-400">
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+      {text}
+    </div>
   );
 }

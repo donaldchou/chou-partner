@@ -2,44 +2,170 @@ import type {
   BACKUP_KINDS,
   BOOKING_STATUSES,
   BUYING_POWERS,
+  BRANDS,
   CUSTOMER_SOURCES,
+  DELIVERY_SLOTS,
+  GENDERS,
+  LEGACY_SOURCES,
+  ORDER_CHANNELS,
+  ORDER_STATUSES,
+  PAYMENT_METHODS,
+  PAYMENT_STATUSES,
+  PHONE_TYPES,
+  SHIPMENT_STATUSES,
   GROUP_BUY_STATUSES,
   PERSON_ROLES,
   SHIPPING_MODES,
 } from "./enums";
 
 export type CustomerSource = (typeof CUSTOMER_SOURCES)[number];
+export type OrderChannel = (typeof ORDER_CHANNELS)[number];
+export type Brand = (typeof BRANDS)[number];
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+export interface Phone {
+  number: string;
+  /** 只留數字，用來比對同一位客戶 */
+  digits: string;
+  type: (typeof PHONE_TYPES)[number];
+}
+
+export interface Address {
+  zip: string;
+  address: string;
+  lastUsedAt?: string;
+}
+
+export interface CustomerStats {
+  orderCount: number;
+  totalSpent: number;
+  firstOrderAt: string;
+  lastOrderAt: string;
+  lastProduct: string;
+}
+
+/** 客戶：一人一筆，以電話去重；訂單在 orders 集合 */
+export interface Customer {
+  id: string;
+  name: string;
+  company: string;
+  title?: string;
+  gender: (typeof GENDERS)[number];
+  phones: Phone[];
+  emails: string[];
+  lineName?: string;
+  addresses: Address[];
+  sources: CustomerSource[];
+  tags: string[];
+  stats: CustomerStats;
+  cardImage?: string;
+  note?: string;
+  createdAt: string;
+}
 
 export interface OrderItem {
+  sku?: string;
   product: string;
   spec: string;
   qty: number;
+  /** 下單當時的單價 */
   unitPrice: number;
+  subtotal: number;
+}
+
+export interface OrderExtra {
+  name: string;
+  desc?: string;
+  amount: number;
+}
+
+export interface Package {
+  trackingNo: string;
+  boxes: number;
+  collectAmount?: number;
+  labelUrl?: string;
+  printedAt?: string;
+}
+
+/** 收件人與出貨：一張訂單可以寄到多個地址 */
+export interface Shipment {
+  id: string;
+  recipient: { name: string; phone: string; phone2?: string; zip?: string; address: string };
+  items: { sku?: string; product?: string; spec: string; qty: number }[];
+  deliverySlot?: (typeof DELIVERY_SLOTS)[number];
+  requestedShipDate?: string;
+  shippedAt?: string;
+  carrier?: string;
+  packages: Package[];
+  status: (typeof SHIPMENT_STATUSES)[number];
+}
+
+export interface Payment {
+  method: PaymentMethod;
+  status: PaymentStatus;
+  codFee: number;
+  paidAmount?: number;
+  paidAt?: string;
+  reports: { text: string; photoUrl?: string; reportedAt?: string }[];
+}
+
+export interface OrderAmounts {
+  items: number;
+  extras: number;
+  codFee: number;
+  shipping: number;
+  adjust: number;
+  total: number;
+}
+
+export interface Legacy {
+  source: (typeof LEGACY_SOURCES)[number];
+  file: string;
+  /** 去重鍵，重複匯入不會產生重複訂單 */
+  key: string;
+  rawText?: string;
+  parsedBy: "rule" | "ai";
+  needsReview: boolean;
+  reviewReasons?: string[];
+  importedAt?: string;
 }
 
 export interface Order {
   id: string;
-  date: string; // YYYY-MM-DD
+  orderNo: string;
+  channel: OrderChannel;
+  brand: Brand;
+  season: number;
+  customerId: string;
+  buyer: { name: string; phone: string; phone2?: string; email?: string; gender?: string };
+  referrer?: string;
+  orderedAt: string; // YYYY-MM-DDTHH:mm
   items: OrderItem[];
+  extras: OrderExtra[];
+  shipments: Shipment[];
+  payment: Payment;
+  amounts: OrderAmounts;
+  status: OrderStatus;
+  processedAt?: string;
   note?: string;
+  internalNote?: string;
+  legacy?: Legacy;
 }
 
-export interface Customer {
-  id: string;
-  company: string;
+export interface Product {
+  id: string; // sku
+  brand: Brand;
+  category: string;
   name: string;
-  title?: string;
-  phone: string;
-  email?: string;
-  address: string;
-  lineName?: string;
-  note?: string;
-  cardImage?: string;
-  source: CustomerSource;
-  createdAt: string;
-  orders: Order[];
+  spec: string;
+  pieces?: number;
+  weight?: string;
+  description?: string;
+  prices: { season: number; listPrice: number; salePrice: number }[];
+  active: boolean;
 }
-
 export type PersonRole = (typeof PERSON_ROLES)[number];
 
 export interface Person {
@@ -141,8 +267,9 @@ export interface GroupBuy {
   createdAt: string;
 }
 
+/** 前端一次載入的資料（客戶與訂單量大，改用分頁 API） */
 export interface AppState {
-  customers: Customer[];
+  products: Product[];
   agencies: Agency[];
   bookings: Booking[];
   groupBuys: GroupBuy[];

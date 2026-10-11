@@ -1,5 +1,24 @@
 // 前端型別與 Mongoose schema 共用的選項清單
-export const CUSTOMER_SOURCES = ["名片", "手動", "Word匯入", "MDB匯入"] as const;
+/** 客戶從哪些通路來過（可多個） */
+export const CUSTOMER_SOURCES = ["網站", "電話", "LINE", "現場", "名片", "團購", "旅行社"] as const;
+export const GENDERS = ["", "F", "M"] as const;
+export const PHONE_TYPES = ["手機", "市話"] as const;
+
+/** 訂單 */
+export const ORDER_CHANNELS = ["網站", "電話", "LINE", "現場", "團購", "旅行社"] as const;
+export const BRANDS = ["", "donald", "kaki", "bigfarm"] as const;
+export const BRAND_LABELS: Record<(typeof BRANDS)[number], string> = {
+  "": "",
+  donald: "水蜜桃網站",
+  kaki: "甜柿網站",
+  bigfarm: "bigfarm 網站",
+};
+export const ORDER_STATUSES = ["新訂單", "處理中", "已出貨", "已完成", "已取消"] as const;
+export const PAYMENT_METHODS = ["", "貨到付款", "信用卡", "ATM轉帳", "現金", "其他"] as const;
+export const PAYMENT_STATUSES = ["未付款", "待匯款", "已付款", "貨到收款", "部分付款", "已退款"] as const;
+export const DELIVERY_SLOTS = ["", "早上08~12點", "中午12~18點", "晚上18~22點"] as const;
+export const SHIPMENT_STATUSES = ["待出貨", "已出貨", "已送達", "退件"] as const;
+export const LEGACY_SOURCES = ["mdb", "word"] as const;
 export const PERSON_ROLES = ["領隊", "司機"] as const;
 export const BOOKING_STATUSES = ["已預約", "已到場", "已取消"] as const;
 export const BUYING_POWERS = ["高", "中", "低"] as const;

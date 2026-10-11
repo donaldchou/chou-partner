@@ -9,9 +9,9 @@ import { uid } from "./utils";
 type Data = Record<string, unknown>;
 
 /** 不回傳給前端的內部欄位 */
-const HIDDEN = "-phoneDigits";
+const HIDDEN = "";
 
-const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+export const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** GET /api/db：前端啟動時一次載入全部資料 */
 export async function loadAll(): Promise<AppState> {

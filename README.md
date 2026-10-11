@@ -12,63 +12,66 @@
 | `GEMINI_MODEL` | | 預設 `gemini-3.6-flash`，失敗時自動改用 `gemini-3.5-flash-lite` |
 
 ```bash
-npm run dev   # http://localhost:3000
+npm run dev                             # http://localhost:3000
+npm run import:legacy -- --dry-run      # 試跑歷年訂單匯入（不寫入）
+npm run import:legacy                   # 匯入 db_test_file/mdb 與 db_test_file/word（重複執行不會重複）
 ```
 
 ## 架構
 
 ```
-src/lib/mongodb.ts       共用連線 connectDB()（global 快取，hot reload 不會重複連線）
-src/models/              Mongoose schema：customer / tour（agency、booking）/ group-buy / file
-src/lib/collections.ts   API 集合名稱 ↔ Model、排序、篩選、搜尋欄位
-src/lib/repo.ts          通用 CRUD 與各集合的寫入規則
-src/lib/blob.ts          Vercel Blob 上傳；資料更新／刪除時自動刪掉不再使用的檔案
-src/lib/importer.ts      Word / MDB 解析、欄位對應、匯入合併
-src/lib/store.ts         前端資料快取（啟動載入 /api/db，寫入時樂觀更新）
+src/lib/mongodb.ts         共用連線 connectDB()（global 快取，hot reload 不會重複連線）
+src/models/                Mongoose schema：customer / order / product / tour（agency、booking）/ group-buy
+src/lib/customers-repo.ts  客戶：分頁搜尋（含買過的品項）、合併重複客戶、刪除
+src/lib/orders-repo.ts     訂單：分頁搜尋、自動編號、金額重算、儀表板統計
+src/lib/customer-stats.ts  依訂單重算客戶的訂單數、累計金額、回購客標籤
+src/lib/legacy/            歷年資料匯入：mdb.ts（舊網站）、word.ts（電話訂單規則解析）、importer.ts（合併寫入）
+src/lib/collections.ts     通用 CRUD 的集合：products / agencies / bookings / groupBuys
+src/lib/blob.ts            Vercel Blob 上傳；資料更新／刪除時自動刪掉不再使用的檔案
+src/lib/store.ts           前端：小集合啟動時載入 /api/db；客戶與訂單用分頁 API
+scripts/import-legacy.ts   命令列匯入
 ```
 
-照片與檔案存在 Vercel Blob，MongoDB 只存檔案網址（`cardImage`、`people[].photos`、`backups[].fileUrl`）；資料更新或刪除時，不再使用的 Blob 檔案會自動刪除。
+照片與檔案存在 Vercel Blob，MongoDB 只存檔案網址；所有文件使用字串 `_id`，API 輸出時轉成 `id`。日期時間一律存台灣當地時間字串（`YYYY-MM-DD`、`YYYY-MM-DDTHH:mm`）。
 
-所有文件使用字串 `_id`，API 輸出時轉成 `id`；訂購紀錄、領隊/司機、團購品項等子文件內嵌在主文件中，保留前端的 `id`。
+資料設計與歷年資料分析見 [docs/legacy-orders-schema.md](docs/legacy-orders-schema.md)。
 
 ## 資料集合
 
 | 集合 | 內容 | 規則 |
 | --- | --- | --- |
-| `customers` | 客戶 + 內嵌歷年訂購紀錄 `orders[].items[]` | 自動維護 `phoneDigits`（只留數字的電話）供搜尋與匯入比對 |
+| `customers` | 客戶：多支電話（`phones[].digits` 去重）、多個地址、來源通路、標籤、`stats` | `stats` 與「回購客」標籤由訂單自動重算 |
+| `orders` | 訂單：品項、加購、多個收件人 `shipments[]`（含託運單號）、付款、金額、匯入來源 `legacy` | 小計與總金額由後端重算；`legacy.key` 唯一，防止重複匯入；匯入原文不能修改 |
+| `products` | 產品代碼、規格、各產季價格 `prices[]` | |
 | `agencies` | 旅行社 + 內嵌領隊/司機 `people[]`（多張照片） | 移除領隊/司機時，預約中的引用自動清空 |
-| `bookings` | 採果預約 | 旅行社必須存在；`leaderId`/`driverId` 必須是該旅行社對應角色的人；縣市限定 22 縣市 |
+| `bookings` | 採果預約 | 旅行社必須存在；領隊/司機必須是該旅行社對應角色的人 |
 | `groupBuys` | 團購 + 品項、合作紀錄、收件人、宅配單備份 | 結團日期不可早於開團日期 |
-
 
 ## API
 
-### 通用 CRUD（`<collection>` = customers / agencies / bookings / groupBuys）
+### 客戶與訂單
 
 | 方法 | 路徑 | 說明 |
 | --- | --- | --- |
-| GET | `/api/db` | 一次取得全部資料 |
-| GET | `/api/<collection>?q=&from=&to=&欄位=值` | 列表；`q` 多關鍵字搜尋（空白分隔），`from`/`to` 日期區間 |
-| POST | `/api/<collection>` | 新增 |
-| GET | `/api/<collection>/<id>` | 單筆 |
-| PUT | `/api/<collection>/<id>` | 整筆儲存（不存在時建立，回 201） |
-| DELETE | `/api/<collection>/<id>` | 刪除；旅行社有預約時需 `?cascade=true`，否則 409 |
+| GET | `/api/customers?q=&source=&tag=&sort=recent\|orders\|spent\|name\|created&page=&limit=&withOrders=1` | 分頁搜尋；`q` 比對姓名、公司、電話（可不打 -）、地址、LINE，以及買過的品項規格 |
+| POST | `/api/customers` | 新增 |
+| GET / PUT / DELETE | `/api/customers/<id>` | 單筆（含全部訂單）／儲存／刪除（有訂單需 `?cascade=true`） |
+| POST | `/api/customers/<id>/merge` | `{ from }`：把重複客戶併入，訂單一起移過來 |
+| GET | `/api/orders?q=&season=&channel=&status=&brand=&payStatus=&review=1&customerId=&sort=new\|old&page=&limit=` | 分頁搜尋，回傳 `amount`（符合條件的金額合計） |
+| POST | `/api/orders` | 新增（沒有 `orderNo` 時自動編號，例如 `T-2026-0042`） |
+| GET / PUT / DELETE | `/api/orders/<id>` | 單筆（含客戶）／儲存／刪除；之後自動重算客戶統計 |
+| GET | `/api/stats` | 儀表板：客戶數、回購客、各產季營收、本季各通路、待處理／待匯款／待確認 |
 
-可篩選欄位：customers `source`；bookings `agencyId`、`status`、`county`；groupBuys `status`、`shippingMode`。
-
-### 專屬功能
+### 其他
 
 | 方法 | 路徑 | 說明 |
 | --- | --- | --- |
-| POST | `/api/upload` | multipart `file`、`folder`（cards / people / shipping）→ 上傳到 Vercel Blob，回傳 `{ url, name, size, contentType }`；單檔 4MB |
-| POST | `/api/ocr/business-card` | `{ url }`（名片的 Blob 網址）→ 名片欄位；`mock: true` 表示未設定 Gemini |
-| POST | `/api/import/parse` | multipart `file`、`kind`=word\|mdb、`table`（MDB 資料表）→ 預覽列，標記既有客戶 |
-| POST | `/api/import/commit` | `{ source, rows }` → 依電話合併客戶；重複的訂購紀錄自動略過 |
-| POST | `/api/seed` | 放入示範資料（只在資料庫完全沒資料時可用） |
+| GET | `/api/db` | 一次取得小集合（products / agencies / bookings / groupBuys） |
+| GET / POST / PUT / DELETE | `/api/<collection>[/<id>]` | 上述小集合的通用 CRUD；旅行社有預約時刪除需 `?cascade=true` |
+| POST | `/api/upload` | multipart `file`、`folder` → Vercel Blob，回傳 `{ url, name, size, contentType }`；單檔 4MB |
+| POST | `/api/ocr/business-card` | `{ url }` → 名片欄位；`mock: true` 表示未設定 Gemini |
+| POST | `/api/import/parse` | multipart `file`、`kind`=mdb\|word → 統計與前 200 筆預覽（不寫入） |
+| POST | `/api/import/commit` | 同上 → 寫入；已匯入的略過，客戶依電話合併 |
 | GET | `/api/health` | 資料庫連線檢查 |
 
 錯誤一律回 `{ error: "中文訊息" }`：驗證錯誤 400、找不到 404、衝突 409、檔案太大 413、格式不支援 415。
-
-### 匯入的欄位對應
-
-Word 表格第一列、MDB 資料表欄位名稱只要包含以下字詞就會自動對應：姓名/客戶/訂購人/收件人、公司/單位、電話/手機、地址、日期/訂購日期、產品/品名/商品、規格/包裝、數量、單價/售價、金額/小計（沒有單價時用金額 ÷ 數量）。日期支援 `2024/1/8`、`2024-01-08`、`20240108`、民國年 `112/11/05`。
