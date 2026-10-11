@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleError, readFile } from "@/lib/api";
+import { requireAdmin } from "@/lib/auth";
 import { parseUpload } from "@/lib/legacy/from-upload";
 import { connectDB } from "@/lib/mongodb";
 import { OrderModel } from "@/models/order";
@@ -12,6 +13,7 @@ const PREVIEW = 200;
  */
 export async function POST(req: Request) {
   try {
+    await requireAdmin();
     const { file, form, buffer } = await readFile(req, "file", 4 * 1024 * 1024);
     const r = await parseUpload(form.get("kind"), file.name, buffer);
     await connectDB();

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { HttpError, handleError, readFile } from "@/lib/api";
+import { requireAdmin } from "@/lib/auth";
 import { uploadBlob } from "@/lib/blob";
 
 // Vercel 伺服器上傳的 body 上限約 4.5MB；照片在前端會先壓縮成 JPEG（約 100–300KB）
@@ -22,6 +23,7 @@ const EXT_TYPES: Record<string, string> = { csv: "text/csv", xls: "application/v
  */
 export async function POST(req: Request) {
   try {
+    await requireAdmin();
     const { file, form } = await readFile(req, "file", MAX_BYTES);
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
     // 有些瀏覽器不給 csv / xls 的 MIME type，用副檔名補

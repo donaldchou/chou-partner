@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { useCanEdit } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 export function PageHeader({
@@ -10,12 +11,17 @@ export function PageHeader({
   subtitle,
   back,
   actions,
+  info,
 }: {
   title: string;
   subtitle?: string;
   back?: string;
+  /** 新增、編輯、刪除等按鈕：只有管理者看得到 */
   actions?: React.ReactNode;
+  /** 狀態標籤等資訊：所有人都看得到 */
+  info?: React.ReactNode;
 }) {
+  const canEdit = useCanEdit();
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
@@ -27,15 +33,21 @@ export function PageHeader({
         <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {(info || (actions && canEdit)) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {info}
+          {canEdit && actions}
+        </div>
+      )}
     </div>
   );
 }
-
 export function Card({ className, children }: { className?: string; children: React.ReactNode }) {
   // 外部有指定內距（例如 p-0、p-4）時不加預設的 p-5，避免兩個 class 互相衝突
   const pad = /(^|\s)p-\d/.test(className ?? "") ? "" : "p-5";
-  return <div className={cn("rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-200/60", pad, className)}>{children}</div>;
+  return (
+    <div className={cn("rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-200/60", pad, className)}>{children}</div>
+  );
 }
 
 export function SectionTitle({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {

@@ -45,24 +45,24 @@ export default function OrderDetailPage() {
         title={`訂單 ${order.orderNo}`}
         subtitle={`${order.channel}・下單 ${formatDateTime(order.orderedAt)}${order.legacy ? `・匯入自 ${order.legacy.file}` : ""}`}
         back={reviewing ? "/orders?review=1" : "/orders"}
+        info={
+          <div className="flex items-center gap-1">
+            <OrderStatusBadge status={order.status} />
+            <PayStatusBadge status={order.payment.status} />
+            {reviewing && <ReviewBadge />}
+          </div>
+        }
         actions={
-          <>
-            <div className="flex items-center gap-1">
-              <OrderStatusBadge status={order.status} />
-              <PayStatusBadge status={order.payment.status} />
-              {reviewing && <ReviewBadge />}
-            </div>
-            <Button
-              variant="danger"
-              onClick={async () => {
-                if (!confirm(`確定刪除訂單 ${order.orderNo}？`)) return;
-                await ordersApi.remove(order.id);
-                router.push("/orders");
-              }}
-            >
-              刪除
-            </Button>
-          </>
+          <Button
+            variant="danger"
+            onClick={async () => {
+              if (!confirm(`確定刪除訂單 ${order.orderNo}？`)) return;
+              await ordersApi.remove(order.id);
+              router.push("/orders");
+            }}
+          >
+            刪除
+          </Button>
         }
       />
       <OrderForm

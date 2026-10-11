@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | `MONGODB_URI` | ✓ | MongoDB Atlas 連線字串 |
 | `BLOB_READ_WRITE_TOKEN` | ✓ | Vercel Blob（public store），存名片、照片、宅配單檔案 |
+| `JWT_SECRET` | ✓ | 登入 JWT 的簽章密鑰（至少 32 個字元的隨機字串）；部署到 Vercel 時也要設定 |
 | `GEMINI_API_KEY` | | 名片 AI 辨識、無表格 Word 的 AI 整理；沒設定時名片辨識回傳示範資料 |
 | `GEMINI_MODEL` | | 預設 `gemini-3.6-flash`，失敗時自動改用 `gemini-3.5-flash-lite` |
 
@@ -15,6 +16,24 @@
 npm run dev                             # http://localhost:3000
 npm run import:legacy -- --dry-run      # 試跑歷年訂單匯入（不寫入）
 npm run import:legacy                   # 匯入 db_test_file/mdb 與 db_test_file/word（重複執行不會重複）
+```
+
+## 登入與權限
+
+整個網站都要登入（`src/proxy.ts`）。Email + 密碼（bcrypt 雜湊存在 `users` 集合），登入後 JWT（HS256，密鑰 `JWT_SECRET`）存在 HttpOnly cookie，7 天有效；同一個 Email 連續輸錯 5 次鎖 15 分鐘。
+
+| 身分 | 權限 |
+| --- | --- |
+| 管理者 `admin` | 新增、修改、刪除所有資料；使用後台（`/admin`：帳號管理、所有資料） |
+| 一般使用者 `user` | 只能查看 |
+
+每個 API 都會回資料庫確認帳號狀態，後台停用帳號或改身分會立刻生效。至少要保留一位啟用中的管理者，不能停用、降級或刪除自己。
+
+沒有註冊頁。第一個管理者用命令列建立（密碼只從環境變數讀，不會寫進檔案；帳號已存在時不會覆蓋）：
+
+```powershell
+$env:ADMIN_EMAIL="you@example.com"; $env:ADMIN_PASSWORD="********"; npm run create-admin
+npm run create-admin -- --reset-password    # 忘記密碼時重設
 ```
 
 ## 架構
@@ -73,5 +92,14 @@ scripts/import-legacy.ts   命令列匯入
 | POST | `/api/import/parse` | multipart `file`、`kind`=mdb\|word → 統計與前 200 筆預覽（不寫入） |
 | POST | `/api/import/commit` | 同上 → 寫入；已匯入的略過，客戶依電話合併 |
 | GET | `/api/health` | 資料庫連線檢查 |
+| POST | `/api/auth/login` | `{ email, password }` → 設定登入 cookie |
+| POST | `/api/auth/logout` | 清除登入 cookie |
+| GET | `/api/auth/me` | 目前登入的使用者 |
+| GET / POST | `/api/admin/users` | 帳號列表／新增（管理者） |
+| PATCH / DELETE | `/api/admin/users/<id>` | 修改姓名、身分、啟用、重設密碼／刪除（管理者） |
+| GET | `/api/admin/data[/<collection>[/<id>]]` | 各集合筆數／列表／單筆完整內容（管理者） |
+| DELETE | `/api/admin/data/<collection>/<id>` | 刪除（客戶連訂單、旅行社連預約，需 `?cascade=true`） |
+
+讀取需要登入（401），新增、修改、刪除、上傳、匯入需要管理者（403）。
 
 錯誤一律回 `{ error: "中文訊息" }`：驗證錯誤 400、找不到 404、衝突 409、檔案太大 413、格式不支援 415。

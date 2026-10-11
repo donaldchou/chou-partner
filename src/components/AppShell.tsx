@@ -14,7 +14,10 @@ import {
   ReceiptText,
   LayoutDashboard,
   ListOrdered,
+  LogOut,
   Menu,
+  ShieldCheck,
+  UserRound,
   PackagePlus,
   RefreshCw,
   Search,
@@ -22,7 +25,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import { reload, useDBStatus } from "@/lib/store";
+import { logout, reload, useDBStatus, useMe } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Loading } from "./ui";
 
@@ -32,16 +35,16 @@ const NAV = [
     group: "客戶管理",
     items: [
       { href: "/customers", label: "客戶查詢", icon: Search },
-      { href: "/customers/new", label: "客戶建檔", icon: UserPlus },
-      { href: "/customers/import", label: "歷史紀錄匯入", icon: FileUp },
+      { href: "/customers/new", label: "客戶建檔", icon: UserPlus, admin: true },
+      { href: "/customers/import", label: "歷史紀錄匯入", icon: FileUp, admin: true },
     ],
   },
   {
     group: "訂單管理",
     items: [
       { href: "/orders", label: "訂單列表", icon: ReceiptText },
-      { href: "/orders/new", label: "新增訂單", icon: FilePlus2 },
-      { href: "/orders?review=1", label: "待確認訂單", icon: AlertTriangle },
+      { href: "/orders/new", label: "新增訂單", icon: FilePlus2, admin: true },
+      { href: "/orders?review=1", label: "待確認訂單", icon: AlertTriangle, admin: true },
     ],
   },
   {
@@ -55,10 +58,23 @@ const NAV = [
     group: "團購管理",
     items: [
       { href: "/group-buys", label: "團購列表", icon: ListOrdered },
-      { href: "/group-buys/new", label: "新增團購", icon: PackagePlus },
+      { href: "/group-buys/new", label: "新增團購", icon: PackagePlus, admin: true },
     ],
   },
 ];
+
+/** 只有管理者看得到的選單 */
+const ADMIN_NAV = { group: "系統", items: [{ href: "/admin", label: "後台管理", icon: ShieldCheck, admin: true }] };
+
+type NavItem = { href: string; label: string; icon: typeof Search; admin?: boolean };
+type NavGroup = { group: string; items: NavItem[] };
+
+/** 依身分過濾選單：一般使用者看不到新增、匯入與後台 */
+function navFor(isAdmin: boolean): NavGroup[] {
+  return [...NAV, ADMIN_NAV]
+    .map((g) => ({ ...g, items: (g.items as NavItem[]).filter((it) => isAdmin || !it.admin) }))
+    .filter((g) => g.items.length);
+}
 
 /* ---------------- 側邊選單收合狀態，記在這台電腦的瀏覽器 ---------------- */
 const COLLAPSE_KEY = "chou-partner-sidebar-collapsed";
@@ -98,15 +114,16 @@ function useCollapsed(): [boolean, (v: boolean) => void] {
 
 /** 選單中最符合目前網址的項目（例如 /customers/c1 → 客戶查詢，/customers/new → 客戶建檔） */
 function activeHref(pathname: string) {
-  const matches = NAV.flatMap((g) => g.items.map((it) => it.href)).filter((href) =>
-    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/"),
-  );
+  const matches = [...NAV, ADMIN_NAV]
+    .flatMap((g) => g.items.map((it) => it.href))
+    .filter((href) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/")));
   return matches.sort((a, b) => b.length - a.length)[0];
 }
 
 function NavItems({ pathname, mini, onNavigate }: { pathname: string; mini: boolean; onNavigate: () => void }) {
   const current = activeHref(pathname);
-  return NAV.map((g) => (
+  const isAdmin = useMe()?.role === "admin";
+  return navFor(isAdmin).map((g) => (
     <div key={g.group}>
       {mini ? (
         <div className="mx-2 mb-2 border-t border-slate-200" />
@@ -177,6 +194,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </Suspense>
       </div>
       <div className="border-t border-slate-200 p-3">
+        <UserBlock mini={mini} />
         <DBIndicator mini={mini} />
       </div>
     </nav>
@@ -226,6 +244,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {/* 內容用滿寬度，左右只留少量空白 */}
         <main className="px-3 py-4 sm:px-4 lg:py-5 lg:pr-5 print:p-0">
           <DBStatusBanner />
+          <ReadOnlyBanner />
           <Suspense fallback={<Loading />}>{children}</Suspense>
         </main>
       </div>
@@ -274,4 +293,48 @@ function DBStatusBanner() {
     );
   }
   return null;
+}
+
+/** 選單底部：目前登入的人、身分、登出 */
+function UserBlock({ mini }: { mini: boolean }) {
+  const me = useMe();
+  const role = me ? (me.role === "admin" ? "管理者" : "一般使用者（唯讀）") : "";
+  return (
+    <div className="mb-1 space-y-1">
+      <div
+        className={cn("flex items-center gap-2.5 py-1 text-slate-600", mini ? "justify-center" : "px-3")}
+        title={me ? `${me.email}（${role}）` : undefined}
+      >
+        <UserRound size={19} className="shrink-0 text-slate-400" />
+        {!mini && (
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium">{me?.name || me?.email || "…"}</div>
+            <div className="text-xs text-slate-400">{role}</div>
+          </div>
+        )}
+      </div>
+      <button
+        onClick={() => void logout()}
+        title={mini ? "登出" : undefined}
+        aria-label="登出"
+        className={cn(
+          "flex w-full items-center gap-2.5 rounded-xl py-1.5 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700",
+          mini ? "justify-center" : "px-3",
+        )}
+      >
+        <LogOut size={17} className="shrink-0" />
+        {!mini && "登出"}
+      </button>
+    </div>
+  );
+}
+/** 一般使用者：提示只能查看 */
+function ReadOnlyBanner() {
+  const me = useMe();
+  if (!me || me.role === "admin") return null;
+  return (
+    <div className="mb-4 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-800 print:hidden">
+      你的帳號是一般使用者，只能查看資料；需要新增或修改請聯絡管理者。
+    </div>
+  );
 }

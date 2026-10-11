@@ -26,6 +26,13 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
     headers: isForm ? init?.headers : { "Content-Type": "application/json", ...init?.headers },
   });
   if (res.status === 204) return undefined as T;
+  // 登入過期或帳號被停用：回登入頁，登入後再回到這一頁
+  if (res.status === 401 && typeof window !== "undefined" && location.pathname !== "/login") {
+    await fetch("/api/auth/logout", { method: "POST" });
+    // 故意整頁重新載入，清掉記憶體裡的資料
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(data.error ?? `HTTP ${res.status}`), { status: res.status, data });
   return data as T;
@@ -173,3 +180,42 @@ export interface DashboardStats {
   byChannel: { channel: string; orders: number; amount: number }[];
 }
 export const statsApi = { get: () => api<DashboardStats>("/api/stats") };
+
+/* ---------------- 目前登入的使用者 ---------------- */
+export type Me = { id: string; email: string; name: string; role: "admin" | "user" };
+let me: Me | null = null;
+let meLoading = false;
+const meListeners = new Set<() => void>();
+
+async function loadMe() {
+  meLoading = true;
+  try {
+    me = await api<Me>("/api/auth/me");
+  } catch {
+    me = null;
+  }
+  meListeners.forEach((l) => l());
+}
+
+/** 目前登入的使用者；還沒載入完是 null */
+export function useMe(): Me | null {
+  return useSyncExternalStore(
+    (l) => {
+      meListeners.add(l);
+      if (!meLoading) void loadMe();
+      return () => meListeners.delete(l);
+    },
+    () => me,
+    () => null,
+  );
+}
+
+/** 只有管理者可以新增、修改、刪除；一般使用者只能看 */
+export const useCanEdit = () => useMe()?.role === "admin";
+
+export async function logout() {
+  await fetch("/api/auth/logout", { method: "POST" });
+  // 整頁重新載入，清掉記憶體裡的資料
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.href = "/login";
+}

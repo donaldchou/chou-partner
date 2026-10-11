@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { HttpError, handleError, readJson } from "@/lib/api";
+import { requireAdmin } from "@/lib/auth";
 import { geminiJson } from "@/lib/gemini";
 import { mockCards } from "@/lib/mock-data";
 import { isBlobUrl } from "@/lib/blob";
@@ -32,6 +33,7 @@ email、address 地址（完整中文地址）、lineName LINE ID 或名稱。�
  */
 export async function POST(req: Request) {
   try {
+    await requireAdmin();
     const { url } = await readJson(req);
     if (!isBlobUrl(url)) throw new HttpError(400, "請傳入這個平台上傳的名片網址");
 
