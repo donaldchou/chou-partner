@@ -2,11 +2,12 @@ import { CustomerModel } from "@/models/customer";
 import { OrderModel } from "@/models/order";
 import { HttpError, fromClient, toClient } from "./api";
 import { assertNoInlineFiles, collectBlobUrls, deleteBlobs, deleteRemovedBlobs } from "./blob";
+import { sharedPhones, suspectFilter, suspectReasons, suspectReasonsOf } from "./customer-quality";
 import { recomputeStats } from "./customer-stats";
 import { connectDB } from "./mongodb";
 import { escapeRegex } from "./repo";
 import type { Customer, Order } from "./types";
-import { today, uid } from "./utils";
+import { nowStr, today, uid } from "./utils";
 
 type Data = Record<string, unknown>;
 
@@ -53,10 +54,17 @@ const SORTS: Record<string, Record<string, 1 | -1>> = {
   created: { createdAt: -1, _id: 1 },
 };
 
-/** GET /api/customers?q=&source=&tag=&sort=&page=&limit=&withOrders=1 */
+/**
+ * GET /api/customers?q=&source=&tag=&status=&sort=&page=&limit=&withOrders=1
+ * status：空白 = 有效客戶（預設）、suspect = 疑似無效（待確認）、invalid = 已標記無效、all = 全部
+ */
 export async function listCustomers(params: URLSearchParams) {
   await connectDB();
   const and: Data[] = [];
+  const status = params.get("status") ?? "";
+  if (status === "invalid") and.push({ invalid: { $ne: null } });
+  else if (status === "suspect") and.push(await suspectFilter());
+  else if (status !== "all") and.push({ invalid: null });
   const q = params.get("q")?.trim();
   if (q) and.push(...(await keywordFilter(q)));
   const source = params.get("source");
@@ -89,7 +97,39 @@ export async function listCustomers(params: URLSearchParams) {
     }
     items.forEach((c) => (c.orders = byCustomer.get(c.id) ?? []));
   }
+  if (status === "suspect") {
+    const shared = new Set(await sharedPhones());
+    items.forEach((c) => (c.suspectReasons = suspectReasons(c, shared)));
+  }
   return { items, total, page, limit };
+}
+
+/** 各狀態的客戶數（客戶查詢頁的分頁標籤） */
+export async function customerCounts() {
+  await connectDB();
+  const [valid, suspect, invalid] = await Promise.all([
+    CustomerModel.countDocuments({ invalid: null }),
+    CustomerModel.countDocuments(await suspectFilter()),
+    CustomerModel.countDocuments({ invalid: { $ne: null } }),
+  ]);
+  return { valid, suspect, invalid };
+}
+
+/**
+ * PATCH /api/customers/<id>/status
+ * { invalid: { reason, note } } 標記無效、{ invalid: null } 取消標記、{ suspectChecked: true } 確認是正常客戶
+ */
+export async function setCustomerStatus(id: string, body: Data, by: string) {
+  await connectDB();
+  const doc = await CustomerModel.findById(id);
+  if (!doc) throw new HttpError(404, "找不到客戶");
+  if ("invalid" in body) {
+    const inv = body.invalid as { reason?: string; note?: string } | null;
+    doc.set("invalid", inv ? { reason: inv.reason, note: String(inv.note ?? "").trim(), at: nowStr(), by } : null);
+  }
+  if ("suspectChecked" in body) doc.set("suspectChecked", !!body.suspectChecked);
+  await doc.save();
+  return getCustomer(id);
 }
 
 /** GET /api/customers/<id>：客戶 + 全部訂單 */
@@ -98,7 +138,8 @@ export async function getCustomer(id: string) {
   const doc = await CustomerModel.findById(id).lean();
   if (!doc) throw new HttpError(404, "找不到客戶");
   const orders = await OrderModel.find({ customerId: id }).sort({ orderedAt: -1 }).lean();
-  return { ...toClient<Customer>(doc), orders: orders.map((o) => toClient<Order>(o)) };
+  const c = toClient<Customer>(doc);
+  return { ...c, suspectReasons: await suspectReasonsOf(c), orders: orders.map((o) => toClient<Order>(o)) };
 }
 
 /** PUT /api/customers/<id>：stats 由訂單重算，前端送來的不採用 */
@@ -107,6 +148,10 @@ export async function saveCustomer(id: string, body: Data) {
   const data = fromClient(body);
   delete data.stats;
   delete data.orders;
+  // 無效標記只能從 /status 修改，編輯資料時保留原本的
+  delete data.invalid;
+  delete data.suspectChecked;
+  delete data.suspectReasons;
   assertNoInlineFiles(data);
   const doc = await CustomerModel.findById(id);
   if (!doc) {
@@ -114,7 +159,8 @@ export async function saveCustomer(id: string, body: Data) {
     return { doc: toClient(created.toObject()), created: true };
   }
   const before = doc.toObject();
-  doc.overwrite({ ...data, _id: id, stats: (before as { stats?: unknown }).stats });
+  const keep = before as { stats?: unknown; invalid?: unknown; suspectChecked?: boolean };
+  doc.overwrite({ ...data, _id: id, stats: keep.stats, invalid: keep.invalid ?? null, suspectChecked: !!keep.suspectChecked });
   await doc.save();
   await deleteRemovedBlobs(before, data);
   return { doc: toClient(doc.toObject()), created: false };

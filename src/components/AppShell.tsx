@@ -24,11 +24,13 @@ import {
   Search,
   CalendarClock,
   UserPlus,
+  UserX,
   X,
 } from "lucide-react";
 import { logout, reload, useDBStatus, useMe } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Loading } from "./ui";
+import { CodePrompt } from "./unlock";
 
 const NAV = [
   { group: "總覽", items: [{ href: "/", label: "儀表板", icon: LayoutDashboard }] },
@@ -38,6 +40,7 @@ const NAV = [
       { href: "/customers", label: "客戶查詢", icon: Search },
       { href: "/customers/new", label: "客戶建檔", icon: UserPlus, admin: true },
       { href: "/customers/import", label: "歷史紀錄匯入", icon: FileUp, admin: true },
+      { href: "/customers?status=suspect", label: "疑似無效客戶", icon: UserX, admin: true },
     ],
   },
   {
@@ -332,6 +335,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <ReadOnlyBanner />
           <Suspense fallback={<Loading />}>{children}</Suspense>
         </main>
+        {/* 新增、修改、刪除時還沒解鎖：跳出驗證碼輸入框 */}
+        <CodePrompt />
       </div>
     </div>
   );

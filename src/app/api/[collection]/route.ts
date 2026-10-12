@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { HttpError, handleError, readJson } from "@/lib/api";
-import { requireUser, requireAdmin } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
+import { requireEditor } from "@/lib/unlock";
 import { isCollection } from "@/lib/collections";
 import { createDoc, listDocs } from "@/lib/repo";
 
@@ -25,7 +26,8 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 /** POST /api/<collection> 新增一筆 */
 export async function POST(req: NextRequest, ctx: Ctx) {
   try {
-    await requireAdmin();
+    // 新增、修改、刪除都要驗證碼
+    await requireEditor();
     const name = await nameOf(ctx);
     return NextResponse.json(await createDoc(name, await readJson(req)), { status: 201 });
   } catch (err) {

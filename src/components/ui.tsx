@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useCanEdit } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { UnlockTimer } from "./unlock";
 
 export function PageHeader({
   title,
@@ -12,6 +13,7 @@ export function PageHeader({
   back,
   actions,
   info,
+  unlockTimer = true,
 }: {
   title: string;
   subtitle?: string;
@@ -20,6 +22,8 @@ export function PageHeader({
   actions?: React.ReactNode;
   /** 狀態標籤等資訊：所有人都看得到 */
   info?: React.ReactNode;
+  /** 標題旁顯示驗證碼解鎖倒數（後台管理頁有自己的解鎖區塊，設為 false） */
+  unlockTimer?: boolean;
 }) {
   const canEdit = useCanEdit();
   return (
@@ -30,7 +34,10 @@ export function PageHeader({
             <ArrowLeft size={15} /> 返回
           </Link>
         )}
-        <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
+          {unlockTimer && <UnlockTimer />}
+        </div>
         {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
       </div>
       {(info || (actions && canEdit)) && (
@@ -59,11 +66,12 @@ export function SectionTitle({ children, right }: { children: React.ReactNode; r
   );
 }
 
-type Variant = "primary" | "secondary" | "danger" | "ghost";
+type Variant = "primary" | "secondary" | "danger" | "dangerSolid" | "ghost";
 const variants: Record<Variant, string> = {
   primary: "bg-brand-600 text-white shadow-sm hover:bg-brand-700 disabled:bg-brand-300",
   secondary: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:text-slate-400",
   danger: "border border-red-200 bg-white text-red-600 hover:bg-red-50",
+  dangerSolid: "bg-red-600 text-white shadow-sm hover:bg-red-700 disabled:bg-red-300",
   ghost: "text-slate-600 hover:bg-slate-100",
 };
 
@@ -185,12 +193,15 @@ export function Modal({
   onClose,
   title,
   wide,
+  footer,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   wide?: boolean;
+  /** 底部按鈕列（取消／確認等） */
+  footer?: React.ReactNode;
   children: React.ReactNode;
 }) {
   useEffect(() => {
@@ -211,6 +222,9 @@ export function Modal({
           </button>
         </div>
         <div className="p-5 print:p-0">{children}</div>
+        {footer && (
+          <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/60 px-5 py-3 print:hidden">{footer}</div>
+        )}
       </div>
     </div>
   );
@@ -241,6 +255,33 @@ export function Tabs<T extends string>({
         </button>
       ))}
     </div>
+  );
+}
+
+export function Table({ head, children }: { head: React.ReactNode[]; children: React.ReactNode }) {
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-200/60">
+      <table className="w-full min-w-[640px] text-left text-sm">
+        <thead className="bg-slate-50 text-xs text-slate-500">
+          <tr>
+            {head.map((h, i) => (
+              <th key={i} className="whitespace-nowrap px-4 py-3 font-medium">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
+export function Td({ children, className, colSpan }: { children?: React.ReactNode; className?: string; colSpan?: number }) {
+  return (
+    <td colSpan={colSpan} className={cn("px-4 py-3 align-middle", className || "text-slate-700")}>
+      {children}
+    </td>
   );
 }
 

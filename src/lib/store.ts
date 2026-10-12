@@ -34,8 +34,12 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
     window.location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
   }
   const data = await res.json().catch(() => ({}));
-  // 驗證碼解鎖過期：切回需要驗證碼，頁面會重新顯示輸入框
-  if (res.status === 423 && data.needCode) setUnlock(null);
+  // 新增、修改、刪除需要驗證碼：跳出輸入框，解鎖後自動重送這個請求（取消時丟出 cancelled 錯誤）
+  if (res.status === 423 && data.needCode) {
+    setUnlock(null);
+    await requestCode();
+    return api<T>(url, init);
+  }
   if (!res.ok) throw Object.assign(new Error(data.error ?? `HTTP ${res.status}`), { status: res.status, data });
   return data as T;
 }
@@ -98,7 +102,8 @@ async function send(request: Promise<unknown>) {
   try {
     await request;
   } catch (e) {
-    alert(`儲存失敗：${e instanceof Error ? e.message : String(e)}`);
+    // 取消輸入驗證碼不算錯誤，只把畫面還原
+    if (!isCancelled(e)) alert(`儲存失敗：${e instanceof Error ? e.message : String(e)}`);
     await reload();
     throw e;
   }
@@ -116,8 +121,11 @@ function remove<K extends Coll>(key: K, id: string, query = "") {
   return send(api(`/api/${key}/${encodeURIComponent(id)}${query}`, { method: "DELETE" }));
 }
 
-// 呼叫端多半不等待結果（畫面已先更新），失敗時 send() 已提示並重新載入
-const quiet = (p: Promise<unknown>) => void p.catch(() => {});
+// 呼叫端多半不等待結果（畫面已先更新），失敗時 send() 已提示並重新載入；需要時可 await 得知是否成功
+const quiet = (p: Promise<unknown>) => p.then(
+  () => true,
+  () => false,
+);
 
 export const actions = {
   saveProduct: (p: Product) => quiet(save("products", p)),
@@ -154,14 +162,19 @@ const qs = (params: Record<string, string | number | undefined>) =>
 
 export const customersApi = {
   list: (params: Record<string, string | number | undefined>) =>
-    api<Page<Customer & { orders?: OrderBrief[] }>>(`/api/customers?${qs(params)}`),
+    api<Page<Customer & { orders?: OrderBrief[] }> & { counts?: CustomerCounts }>(`/api/customers?${qs(params)}`),
   get: (id: string) => api<CustomerWithOrders>(`/api/customers/${encodeURIComponent(id)}`),
   save: (c: Customer) => api<Customer>(`/api/customers/${encodeURIComponent(c.id)}`, { method: "PUT", body: JSON.stringify(c) }),
   remove: (id: string, cascade = false) =>
     api(`/api/customers/${encodeURIComponent(id)}${cascade ? "?cascade=true" : ""}`, { method: "DELETE" }),
   merge: (into: string, from: string) =>
     api<CustomerWithOrders>(`/api/customers/${encodeURIComponent(into)}/merge`, { method: "POST", body: JSON.stringify({ from }) }),
+  /** 標記無效（invalid）、取消標記（invalid: null）、確認是正常客戶（suspectChecked: true） */
+  setStatus: (id: string, body: { invalid?: { reason: string; note: string } | null; suspectChecked?: boolean }) =>
+    api<CustomerWithOrders>(`/api/customers/${encodeURIComponent(id)}/status`, { method: "PATCH", body: JSON.stringify(body) }),
 };
+
+export type CustomerCounts = { valid: number; suspect: number; invalid: number };
 
 export const ordersApi = {
   list: (params: Record<string, string | number | undefined>) => api<Page<Order> & { amount: number }>(`/api/orders?${qs(params)}`),
@@ -175,6 +188,7 @@ export interface DashboardStats {
   seasons: number[];
   customers: number;
   repeatCustomers: number;
+  suspectCustomers: number;
   needsReview: number;
   pendingOrders: number;
   unpaidOrders: number;
@@ -266,4 +280,52 @@ export async function unlock(code: string) {
 export async function lockNow() {
   await api("/api/unlock", { method: "DELETE" });
   setUnlock(null);
+}
+
+/* ---------------- 需要驗證碼時的輸入框（<CodePrompt /> 放在 AppShell） ---------------- */
+let codeAsk: { resolve: () => void; reject: (e: Error) => void } | null = null;
+let codePromise: Promise<void> | null = null;
+const codeListeners = new Set<() => void>();
+const emitCode = () => codeListeners.forEach((l) => l());
+
+/** 同時有好幾個請求需要驗證碼時，共用同一個輸入框 */
+function requestCode() {
+  codePromise ??= new Promise<void>((resolve, reject) => {
+    codeAsk = { resolve, reject };
+    emitCode();
+  }).finally(() => {
+    codeAsk = null;
+    codePromise = null;
+    emitCode();
+  });
+  return codePromise;
+}
+
+/** 是否正在等使用者輸入驗證碼 */
+export function useCodeRequested() {
+  return useSyncExternalStore(
+    (l) => {
+      codeListeners.add(l);
+      return () => codeListeners.delete(l);
+    },
+    () => codeAsk !== null,
+    () => false,
+  );
+}
+
+/** 輸入驗證碼：正確時解鎖並繼續剛才的動作；錯誤時丟出錯誤，輸入框保持開著 */
+export async function submitCode(code: string) {
+  await unlock(code);
+  codeAsk?.resolve();
+}
+
+export function cancelCode() {
+  codeAsk?.reject(Object.assign(new Error("已取消：新增、修改、刪除需要驗證碼"), { cancelled: true }));
+}
+
+export const isCancelled = (e: unknown) => !!(e as { cancelled?: boolean } | null)?.cancelled;
+
+/** 顯示「xx失敗：原因」；取消輸入驗證碼時不顯示 */
+export function alertError(prefix: string, e: unknown) {
+  if (!isCancelled(e)) alert(`${prefix}：${e instanceof Error ? e.message : e}`);
 }

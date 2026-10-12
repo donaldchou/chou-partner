@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { Badge, Button, Card, PageHeader, Tabs } from "@/components/ui";
 import { itemsText } from "@/lib/calc";
-import { api } from "@/lib/store";
+import { alertError, api } from "@/lib/store";
 import type { OrderItem } from "@/lib/types";
 import { formatDate, money } from "@/lib/utils";
 
@@ -82,7 +82,7 @@ export default function ImportPage() {
       setParsed(await api<ParseResult>("/api/import/parse", { method: "POST", body: form() }));
       setStep("preview");
     } catch (e) {
-      alert(`解析失敗：${e instanceof Error ? e.message : e}`);
+      alertError("解析失敗", e);
       setStep("pick");
     }
   }
@@ -93,7 +93,7 @@ export default function ImportPage() {
       setResult(await api<CommitResult>("/api/import/commit", { method: "POST", body: form() }));
       setStep("done");
     } catch (e) {
-      alert(`匯入失敗：${e instanceof Error ? e.message : e}`);
+      alertError("匯入失敗", e);
       setStep("preview");
     }
   }

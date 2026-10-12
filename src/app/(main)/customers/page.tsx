@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { useState } from "react";
-import { Badge, Card, Empty, Input, LinkButton, PageHeader, Pagination, Select, Spinner, useDebounced } from "@/components/ui";
+import { CustomerStatusBanner, InvalidBadge } from "@/components/CustomerStatus";
+import { Badge, Card, Empty, Input, LinkButton, PageHeader, Pagination, Select, Spinner, Tabs, useDebounced } from "@/components/ui";
 import { itemsText } from "@/lib/calc";
 import { CUSTOMER_SOURCES } from "@/lib/enums";
 import { customersApi, type OrderBrief } from "@/lib/store";
 import type { Customer } from "@/lib/types";
 import { useFetch } from "@/lib/use-fetch";
-import { formatDate, money } from "@/lib/utils";
+import { cn, formatDate, money } from "@/lib/utils";
 
 const SORTS = [
   { v: "recent", label: "最近購買" },
@@ -19,14 +21,39 @@ const SORTS = [
   { v: "name", label: "姓名" },
 ];
 
+type Status = "" | "suspect" | "invalid";
+const STATUS_TEXT: Record<Status, { title: string; subtitle: string; empty: string }> = {
+  "": {
+    title: "客戶資料查詢",
+    subtitle: "可用姓名、公司、電話、地址、LINE，或買過的品項規格查詢（例如「甜柿 台中」）",
+    empty: "找不到符合的客戶",
+  },
+  suspect: {
+    title: "疑似無效客戶",
+    subtitle: "系統自動挑出資料可疑的客戶，逐筆確認是「正常客戶」或「標記無效」",
+    empty: "沒有疑似無效的客戶 🎉",
+  },
+  invalid: {
+    title: "無效客戶",
+    subtitle: "已標記為無效的客戶：客戶查詢預設不顯示、儀表板不計入，資料與訂單仍保留",
+    empty: "沒有無效客戶",
+  },
+};
+
 export default function CustomersPage() {
+  const router = useRouter();
+  const sp = useSearchParams();
+  const raw = sp.get("status");
+  const status: Status = raw === "suspect" || raw === "invalid" ? raw : "";
   const [kw, setKw] = useState("");
   const [sort, setSort] = useState("recent");
   const [source, setSource] = useState("");
   const [page, setPage] = useState(1);
   const q = useDebounced(kw.trim());
-  const params = { q, sort, source, page, limit: 20, withOrders: 1 };
-  const { data, loading, error } = useFetch(JSON.stringify(params), () => customersApi.list(params));
+  const params = { q, sort, source, status, page, limit: 20, withOrders: 1, withCounts: 1 };
+  const { data, loading, error, reload } = useFetch(JSON.stringify(params), () => customersApi.list(params));
+  const text = STATUS_TEXT[status];
+  const counts = data?.counts;
 
   const reset =
     <T,>(fn: (v: T) => void) =>
@@ -38,8 +65,8 @@ export default function CustomersPage() {
   return (
     <div>
       <PageHeader
-        title="客戶資料查詢"
-        subtitle="可用姓名、公司、電話、地址、LINE，或買過的品項規格查詢（例如「甜柿 台中」）"
+        title={text.title}
+        subtitle={text.subtitle}
         actions={
           <>
             <LinkButton href="/customers/import" variant="secondary">
@@ -48,6 +75,19 @@ export default function CustomersPage() {
             <LinkButton href="/customers/new">＋ 新增客戶</LinkButton>
           </>
         }
+      />
+
+      <Tabs<Status>
+        value={status}
+        onChange={(v) => {
+          setPage(1);
+          router.replace(v ? `/customers?status=${v}` : "/customers");
+        }}
+        tabs={[
+          { value: "", label: "有效客戶", count: counts?.valid },
+          { value: "suspect", label: "疑似無效（待確認）", count: counts?.suspect },
+          { value: "invalid", label: "無效客戶", count: counts?.invalid },
+        ]}
       />
 
       <div className="mb-4 flex flex-wrap gap-2">
@@ -86,11 +126,11 @@ export default function CustomersPage() {
       {!data ? (
         <Spinner />
       ) : data.items.length === 0 ? (
-        <Empty>找不到符合「{q}」的客戶</Empty>
+        <Empty>{q ? `找不到符合「${q}」的客戶` : text.empty}</Empty>
       ) : (
         <div className={loading ? "space-y-3 opacity-60" : "space-y-3"}>
           {data.items.map((c) => (
-            <CustomerResult key={c.id} c={c} />
+            <CustomerResult key={c.id} c={c} onStatusChange={reload} />
           ))}
         </div>
       )}
@@ -101,20 +141,24 @@ export default function CustomersPage() {
 
 const statusColor = { 新訂單: "blue", 處理中: "amber", 已出貨: "green", 已完成: "green", 已取消: "gray" } as const;
 
-function CustomerResult({ c }: { c: Customer & { orders?: OrderBrief[] } }) {
+function CustomerResult({ c, onStatusChange }: { c: Customer & { orders?: OrderBrief[] }; onStatusChange: () => void }) {
   const [open, setOpen] = useState(false);
   const orders = c.orders ?? [];
   const shown = open ? orders : orders.slice(0, 3);
   const address = c.addresses[0];
 
   return (
-    <Card className="p-0">
-      <div className="grid gap-4 p-5 md:grid-cols-[1fr_1.4fr]">
+    <Card className={cn("p-0", c.invalid && "bg-slate-50")}>
+      <div className={cn("grid gap-4 p-5 md:grid-cols-[1fr_1.4fr]", c.invalid && "opacity-60")}>
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <Link href={`/customers/${c.id}`} className="text-lg font-semibold text-slate-800 hover:text-brand-700">
+            <Link
+              href={`/customers/${c.id}`}
+              className={cn("text-lg font-semibold text-slate-800 hover:text-brand-700", c.invalid && "line-through decoration-slate-400")}
+            >
               {c.name}
             </Link>
+            <InvalidBadge c={c} />
             {c.title && <span className="text-sm text-slate-500">{c.title}</span>}
             {c.tags.includes("回購客") && <Badge color="green">回購客</Badge>}
             {c.sources.map((s) => (
@@ -188,6 +232,11 @@ function CustomerResult({ c }: { c: Customer & { orders?: OrderBrief[] } }) {
           )}
         </div>
       </div>
+      {(c.invalid || !!c.suspectReasons?.length) && (
+        <div className="px-5 pb-4">
+          <CustomerStatusBanner c={c} compact onChange={onStatusChange} />
+        </div>
+      )}
     </Card>
   );
 }

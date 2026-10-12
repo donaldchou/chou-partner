@@ -2,6 +2,7 @@ import { CustomerModel } from "@/models/customer";
 import { OrderModel } from "@/models/order";
 import { HttpError, fromClient, toClient } from "./api";
 import { assertNoInlineFiles, collectBlobUrls, deleteBlobs, deleteRemovedBlobs } from "./blob";
+import { suspectFilter } from "./customer-quality";
 import { recomputeStats } from "./customer-stats";
 import { connectDB } from "./mongodb";
 import { escapeRegex } from "./repo";
@@ -147,9 +148,11 @@ export async function dashboardStats() {
   await connectDB();
   const seasons = ((await OrderModel.distinct("season")) as number[]).sort((a, b) => b - a);
   const season = seasons[0] ?? new Date().getFullYear();
-  const [customers, repeat, review, pending, unpaid, bySeason, byChannel] = await Promise.all([
-    CustomerModel.estimatedDocumentCount(),
-    CustomerModel.countDocuments({ tags: "回購客" }),
+  // 客戶數不含標記為無效的客戶
+  const [customers, repeat, suspect, review, pending, unpaid, bySeason, byChannel] = await Promise.all([
+    CustomerModel.countDocuments({ invalid: null }),
+    CustomerModel.countDocuments({ tags: "回購客", invalid: null }),
+    CustomerModel.countDocuments(await suspectFilter()),
     OrderModel.countDocuments({ "legacy.needsReview": true }),
     OrderModel.countDocuments({ status: { $in: ["新訂單", "處理中"] } }),
     OrderModel.countDocuments({ "payment.status": "待匯款", status: { $ne: "已取消" } }),
@@ -169,6 +172,7 @@ export async function dashboardStats() {
     seasons,
     customers,
     repeatCustomers: repeat,
+    suspectCustomers: suspect,
     needsReview: review,
     pendingOrders: pending,
     unpaidOrders: unpaid,

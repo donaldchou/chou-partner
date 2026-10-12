@@ -31,7 +31,7 @@ export default function Dashboard() {
     {
       label: "客戶總數",
       value: s?.customers.toLocaleString() ?? "…",
-      unit: `回購客 ${s?.repeatCustomers.toLocaleString() ?? "…"} 位`,
+      unit: `回購客 ${s?.repeatCustomers.toLocaleString() ?? "…"} 位・疑似無效 ${s?.suspectCustomers.toLocaleString() ?? "…"} 位待確認`,
       href: "/customers",
       icon: Users,
     },

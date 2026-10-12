@@ -9,7 +9,7 @@ type Ctx = RouteContext<"/api/admin/data/[collection]/[id]">;
 /** GET /api/admin/data/<collection>/<id> 單筆完整內容 */
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
-    await requireUnlocked(await requireAdmin());
+    await requireAdmin();
     const { collection, id } = await ctx.params;
     return NextResponse.json(await getRaw(collection, id));
   } catch (err) {

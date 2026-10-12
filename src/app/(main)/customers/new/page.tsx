@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import CustomerForm, { emptyCustomer } from "@/components/CustomerForm";
 import { PageHeader } from "@/components/ui";
-import { customersApi } from "@/lib/store";
+import { alertError, customersApi } from "@/lib/store";
 import { today, uid } from "@/lib/utils";
 
 export default function NewCustomerPage() {
@@ -24,7 +24,7 @@ export default function NewCustomerPage() {
             await customersApi.save(c);
             router.push(`/customers/${c.id}`);
           } catch (e) {
-            alert(`儲存失敗：${e instanceof Error ? e.message : e}`);
+            alertError("儲存失敗", e);
             setSaving(false);
           }
         }}

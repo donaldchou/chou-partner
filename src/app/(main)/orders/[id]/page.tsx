@@ -5,7 +5,7 @@ import { useState } from "react";
 import OrderForm from "@/components/OrderForm";
 import { OrderStatusBadge, PayStatusBadge, ReviewBadge } from "@/components/OrderBadges";
 import { Button, NotFound, PageHeader, Spinner } from "@/components/ui";
-import { ordersApi } from "@/lib/store";
+import { alertError, ordersApi } from "@/lib/store";
 import type { Order } from "@/lib/types";
 import { useFetch } from "@/lib/use-fetch";
 import { formatDateTime } from "@/lib/utils";
@@ -34,7 +34,7 @@ export default function OrderDetailPage() {
         router.back();
       }
     } catch (e) {
-      alert(`儲存失敗：${e instanceof Error ? e.message : e}`);
+      alertError("儲存失敗", e);
       setSaving(false);
     }
   }

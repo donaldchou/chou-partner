@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import CustomerForm from "@/components/CustomerForm";
+import { Ban } from "lucide-react";
 import CustomerPicker from "@/components/CustomerPicker";
+import { CustomerStatusBanner, InvalidModal } from "@/components/CustomerStatus";
 import { OrderStatusBadge, PayStatusBadge, ReviewBadge } from "@/components/OrderBadges";
 import { Badge, Button, Card, Empty, LinkButton, Modal, NotFound, PageHeader, SectionTitle, Spinner } from "@/components/ui";
 import { itemsText } from "@/lib/calc";
-import { customersApi, type CustomerWithOrders } from "@/lib/store";
+import { alertError, customersApi, type CustomerWithOrders } from "@/lib/store";
 import type { Customer } from "@/lib/types";
 import { useFetch } from "@/lib/use-fetch";
 import { formatDate, money } from "@/lib/utils";
@@ -20,6 +22,7 @@ export default function CustomerDetailPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [merging, setMerging] = useState(false);
+  const [markingInvalid, setMarkingInvalid] = useState(false);
 
   if (error) return <NotFound back="/customers" />;
   if (!c || (loading && !c)) return <Spinner />;
@@ -39,7 +42,7 @@ export default function CustomerDetailPage() {
               set({ ...c, ...saved });
               setEditing(false);
             } catch (e) {
-              alert(`儲存失敗：${e instanceof Error ? e.message : e}`);
+              alertError("儲存失敗", e);
             } finally {
               setSaving(false);
             }
@@ -55,7 +58,7 @@ export default function CustomerDetailPage() {
       await customersApi.remove(cust.id, n > 0);
       router.push("/customers");
     } catch (e) {
-      alert(`刪除失敗：${e instanceof Error ? e.message : e}`);
+      alertError("刪除失敗", e);
     }
   }
 
@@ -67,6 +70,11 @@ export default function CustomerDetailPage() {
         back="/customers"
         actions={
           <>
+            {!c.invalid && (
+              <Button variant="danger" onClick={() => setMarkingInvalid(true)}>
+                <Ban size={15} /> 標記為無效
+              </Button>
+            )}
             <Button variant="secondary" onClick={() => setMerging(true)}>
               合併重複客戶
             </Button>
@@ -77,6 +85,22 @@ export default function CustomerDetailPage() {
           </>
         }
       />
+
+      {(c.invalid || !!c.suspectReasons?.length) && (
+        <div className="mb-5">
+          <CustomerStatusBanner c={c} onChange={set} />
+        </div>
+      )}
+      {markingInvalid && (
+        <InvalidModal
+          c={c}
+          onClose={() => setMarkingInvalid(false)}
+          onDone={(saved) => {
+            setMarkingInvalid(false);
+            set(saved);
+          }}
+        />
+      )}
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="訂單數" value={`${c.stats.orderCount} 筆`} />
@@ -201,7 +225,7 @@ export default function CustomerDetailPage() {
                 set(await customersApi.merge(c.id, other.id));
                 setMerging(false);
               } catch (e) {
-                alert(`合併失敗：${e instanceof Error ? e.message : e}`);
+                alertError("合併失敗", e);
                 reload();
               }
             }}

@@ -9,7 +9,8 @@ export async function GET() {
   // 讀 cookie，只能在請求時執行
   await connection();
   try {
-    await requireUnlocked(await requireAdmin());
+    // 檢視只要管理者；新增、修改、刪除才需要驗證碼
+    await requireAdmin();
     return NextResponse.json(await listUsers());
   } catch (err) {
     return handleError(err);

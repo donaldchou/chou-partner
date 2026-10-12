@@ -1,5 +1,5 @@
 import { Schema } from "mongoose";
-import { CUSTOMER_SOURCES, GENDERS, PHONE_TYPES } from "@/lib/enums";
+import { CUSTOMER_SOURCES, GENDERS, INVALID_REASONS, PHONE_TYPES } from "@/lib/enums";
 import { dateTime, defineModel, digitsOf, fileUrl, idField, required, str, sub, ymd } from "./_shared";
 
 const PhoneSchema = new Schema(
@@ -24,6 +24,17 @@ const StatsSchema = new Schema(
   sub,
 );
 
+/** 無效客戶的標記：原因、說明、誰在什麼時候標記的 */
+const InvalidSchema = new Schema(
+  {
+    reason: { type: String, enum: INVALID_REASONS, required: true },
+    note: str,
+    at: dateTime,
+    by: str,
+  },
+  sub,
+);
+
 /** 客戶：一人一筆，以電話去重；訂單另外存在 orders 集合 */
 const CustomerSchema = new Schema({
   _id: idField,
@@ -42,6 +53,10 @@ const CustomerSchema = new Schema({
   cardImage: fileUrl,
   note: str,
   createdAt: ymd,
+  /** 標記為無效：客戶查詢預設不顯示、儀表板不計入；null = 有效客戶 */
+  invalid: { type: InvalidSchema, default: null },
+  /** 疑似無效清單裡已確認「這位是正常客戶」，不再列入 */
+  suspectChecked: { type: Boolean, default: false },
 });
 
 CustomerSchema.index({ "phones.digits": 1 });

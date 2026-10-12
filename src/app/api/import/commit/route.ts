@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleError, readFile } from "@/lib/api";
-import { requireAdmin } from "@/lib/auth";
+import { requireEditor } from "@/lib/unlock";
 import { parseUpload } from "@/lib/legacy/from-upload";
 import { importOrders, importProducts } from "@/lib/legacy/importer";
 
@@ -10,7 +10,8 @@ import { importOrders, importProducts } from "@/lib/legacy/importer";
  */
 export async function POST(req: Request) {
   try {
-    await requireAdmin();
+    // 新增、修改、刪除都要驗證碼
+    await requireEditor();
     const { file, form, buffer } = await readFile(req, "file", 4 * 1024 * 1024);
     const r = await parseUpload(form.get("kind"), file.name, buffer);
     const products = r.products.length ? await importProducts(r.products) : 0;

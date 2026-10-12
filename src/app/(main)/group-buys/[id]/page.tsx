@@ -79,9 +79,8 @@ export default function GroupBuyDetailPage() {
             key={g.id}
             initial={g}
             showCard
-            onSubmit={(ng) => {
-              actions.saveGroupBuy(ng);
-              alert("已儲存");
+            onSubmit={async (ng) => {
+              if (await actions.saveGroupBuy(ng)) alert("已儲存");
             }}
           />
         </div>

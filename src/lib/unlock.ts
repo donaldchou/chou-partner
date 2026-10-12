@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { HttpError } from "./api";
-import type { PublicUser } from "./auth";
+import { requireAdmin, type PublicUser } from "./auth";
 import { UNLOCK_COOKIE, verifyUnlock } from "./session";
 
 /**
@@ -25,4 +25,11 @@ export async function unlockedUntil(user: PublicUser) {
 /** 需要驗證碼的 API：沒有解鎖時回 423，前端會跳出驗證碼輸入框 */
 export async function requireUnlocked(user: PublicUser) {
   if (!(await unlockedUntil(user))) throw new HttpError(423, "請先輸入驗證碼", { needCode: true });
+}
+
+/** 新增、修改、刪除資料：管理者 + 已輸入驗證碼 */
+export async function requireEditor() {
+  const user = await requireAdmin();
+  await requireUnlocked(user);
+  return user;
 }

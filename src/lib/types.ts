@@ -6,6 +6,7 @@ import type {
   CUSTOMER_SOURCES,
   DELIVERY_SLOTS,
   GENDERS,
+  INVALID_REASONS,
   LEGACY_SOURCES,
   ORDER_CHANNELS,
   ORDER_STATUSES,
@@ -63,6 +64,19 @@ export interface Customer {
   cardImage?: string;
   note?: string;
   createdAt: string;
+  /** 標記為無效；null 或沒有 = 有效客戶 */
+  invalid?: CustomerInvalid | null;
+  /** 疑似無效清單裡已確認是正常客戶 */
+  suspectChecked?: boolean;
+  /** API 算出的疑似無效原因（不存資料庫） */
+  suspectReasons?: string[];
+}
+
+export interface CustomerInvalid {
+  reason: (typeof INVALID_REASONS)[number];
+  note: string;
+  at: string;
+  by: string;
 }
 
 export interface OrderItem {

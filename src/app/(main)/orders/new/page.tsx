@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import OrderForm, { emptyOrder } from "@/components/OrderForm";
 import { PageHeader, Spinner } from "@/components/ui";
-import { customersApi, ordersApi } from "@/lib/store";
+import { alertError, customersApi, ordersApi } from "@/lib/store";
 import { useFetch } from "@/lib/use-fetch";
 import { nowStr, uid } from "@/lib/utils";
 
@@ -54,7 +54,7 @@ function NewOrder() {
           const saved = await ordersApi.save(o);
           router.push(`/orders/${saved.id}`);
         } catch (e) {
-          alert(`儲存失敗：${e instanceof Error ? e.message : e}`);
+          alertError("儲存失敗", e);
           setSaving(false);
         }
       }}
