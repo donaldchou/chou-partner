@@ -19,11 +19,12 @@ const emit = () => {
   listeners.forEach((l) => l());
 };
 
-export async function api<T>(url: string, init?: RequestInit): Promise<T> {
+export async function api<T>(url: string, init?: RequestInit, code?: string): Promise<T> {
   const isForm = init?.body instanceof FormData;
+  const extra: Record<string, string> = code === undefined ? {} : { "x-verify-code": encodeURIComponent(code) };
   const res = await fetch(url, {
     ...init,
-    headers: isForm ? init?.headers : { "Content-Type": "application/json", ...init?.headers },
+    headers: isForm ? { ...init?.headers, ...extra } : { "Content-Type": "application/json", ...init?.headers, ...extra },
   });
   if (res.status === 204) return undefined as T;
   // 登入過期或帳號被停用：回登入頁，登入後再回到這一頁
@@ -34,11 +35,10 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
     window.location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
   }
   const data = await res.json().catch(() => ({}));
-  // 新增、修改、刪除需要驗證碼：跳出輸入框，解鎖後自動重送這個請求（取消時丟出 cancelled 錯誤）
-  if (res.status === 423 && data.needCode) {
+  // 新增、修改、刪除需要驗證碼：跳出輸入框，帶著驗證碼重送這個請求（只對這一次有效；取消時丟出 cancelled 錯誤）
+  if (res.status === 423 && data.needCode && code === undefined) {
     setUnlock(null);
-    await requestCode();
-    return api<T>(url, init);
+    return askCodeAndRetry<T>(url, init);
   }
   if (!res.ok) throw Object.assign(new Error(data.error ?? `HTTP ${res.status}`), { status: res.status, data });
   return data as T;
@@ -283,44 +283,65 @@ export async function lockNow() {
 }
 
 /* ---------------- 需要驗證碼時的輸入框（<CodePrompt /> 放在 AppShell） ---------------- */
-let codeAsk: { resolve: () => void; reject: (e: Error) => void } | null = null;
-let codePromise: Promise<void> | null = null;
+// 每次動作各自輸入；要 1 小時免輸入只能到後台管理解鎖
+export type CodeRequest = {
+  submit: (code: string) => Promise<void>;
+  cancel: () => void;
+  error: string;
+  busy: boolean;
+};
+let codeRequest: CodeRequest | null = null;
+let codeQueue: Promise<unknown> = Promise.resolve(); // 同時有好幾個請求時，一個一個問
 const codeListeners = new Set<() => void>();
-const emitCode = () => codeListeners.forEach((l) => l());
+const setCodeRequest = (r: CodeRequest | null) => {
+  codeRequest = r;
+  codeListeners.forEach((l) => l());
+};
 
-/** 同時有好幾個請求需要驗證碼時，共用同一個輸入框 */
-function requestCode() {
-  codePromise ??= new Promise<void>((resolve, reject) => {
-    codeAsk = { resolve, reject };
-    emitCode();
-  }).finally(() => {
-    codeAsk = null;
-    codePromise = null;
-    emitCode();
-  });
-  return codePromise;
+function askCodeAndRetry<T>(url: string, init?: RequestInit): Promise<T> {
+  const run = () =>
+    new Promise<T>((resolve, reject) => {
+      // 等待期間剛好在後台解鎖了：直接重送
+      if (unlockUntil) return void api<T>(url, init).then(resolve, reject);
+      const req: CodeRequest = {
+        error: "",
+        busy: false,
+        submit: async (code) => {
+          setCodeRequest({ ...req, busy: true, error: "" });
+          try {
+            const data = await api<T>(url, init, code);
+            setCodeRequest(null);
+            resolve(data);
+          } catch (e) {
+            const err = e as Error & { data?: { badCode?: boolean }; status?: number };
+            // 驗證碼錯誤（或錯太多次）：留在輸入框讓使用者重新輸入
+            if (err.data?.badCode || err.status === 429) return setCodeRequest({ ...req, error: err.message });
+            setCodeRequest(null);
+            reject(e);
+          }
+        },
+        cancel: () => {
+          setCodeRequest(null);
+          reject(Object.assign(new Error("已取消：新增、修改、刪除需要驗證碼"), { cancelled: true }));
+        },
+      };
+      setCodeRequest(req);
+    });
+  const p = codeQueue.then(run, run);
+  codeQueue = p.catch(() => {});
+  return p;
 }
 
-/** 是否正在等使用者輸入驗證碼 */
-export function useCodeRequested() {
+/** 目前等待輸入的驗證碼請求；沒有時是 null */
+export function useCodeRequest() {
   return useSyncExternalStore(
     (l) => {
       codeListeners.add(l);
       return () => codeListeners.delete(l);
     },
-    () => codeAsk !== null,
-    () => false,
+    () => codeRequest,
+    () => null,
   );
-}
-
-/** 輸入驗證碼：正確時解鎖並繼續剛才的動作；錯誤時丟出錯誤，輸入框保持開著 */
-export async function submitCode(code: string) {
-  await unlock(code);
-  codeAsk?.resolve();
-}
-
-export function cancelCode() {
-  codeAsk?.reject(Object.assign(new Error("已取消：新增、修改、刪除需要驗證碼"), { cancelled: true }));
 }
 
 export const isCancelled = (e: unknown) => !!(e as { cancelled?: boolean } | null)?.cancelled;
