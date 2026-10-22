@@ -3,6 +3,8 @@ import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
 /** 不用登入就能進的路徑 */
 const PUBLIC = ["/login", "/api/auth/login", "/api/auth/logout"];
+/** 給其他系統（甜柿訂購系統）呼叫的 API：不用登入，改由 API 自己檢查 x-api-key */
+const EXTERNAL_API = "/api/external/";
 
 /**
  * 整個網站都要登入。這裡只驗證 JWT 簽章（不查資料庫），
@@ -12,6 +14,8 @@ export async function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
   const isApi = pathname.startsWith("/api/");
   const session = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
+
+  if (pathname.startsWith(EXTERNAL_API)) return NextResponse.next();
 
   if (PUBLIC.includes(pathname)) {
     // 已登入還開登入頁，直接回首頁
