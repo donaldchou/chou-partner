@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { CustomerModel } from "@/models/customer";
 import { OrderModel } from "@/models/order";
 import { HttpError } from "./api";
@@ -6,17 +6,50 @@ import { BRAND_LABELS } from "./enums";
 import { connectDB } from "./mongodb";
 import { escapeRegex } from "./repo";
 
+function sameText(given: string, expected: string) {
+  const a = Buffer.from(given);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** 通行證有效時間（秒） */
+const TOKEN_TTL = 600;
+
 /**
- * 給其他系統（甜柿訂購系統 kaki_order/quick_order.asp）查詢訂購者／收件者用。
- * 呼叫時要帶 header x-api-key，值等於環境變數 EXTERNAL_API_KEY。
+ * 給其他系統（甜柿訂購系統 kaki_order/quick_order.asp）查詢訂購者／收件者用，兩種驗證擇一：
+ *  x-api-key：值等於環境變數 EXTERNAL_API_KEY（伺服器對伺服器）
+ *  x-api-token：「UTC 秒數.簽章」，簽章＝HMAC-SHA256(EXTERNAL_API_KEY, "lookup:" + 秒數) 的 hex，10 分鐘內有效。
+ *    甜柿主機（舊 Windows）連不上 Vercel 的 TLS，改由管理者瀏覽器帶主機簽發的通行證呼叫，金鑰不會傳到瀏覽器
  */
 export function requireApiKey(req: Request) {
   const expected = process.env.EXTERNAL_API_KEY ?? "";
-  const given = req.headers.get("x-api-key") ?? "";
   if (!expected) throw new HttpError(503, "尚未設定 EXTERNAL_API_KEY");
-  const a = Buffer.from(given);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) throw new HttpError(401, "API key 錯誤");
+  const key = req.headers.get("x-api-key");
+  if (key !== null) {
+    if (!sameText(key, expected)) throw new HttpError(401, "API key 錯誤");
+    return;
+  }
+  const m = /^(\d{10})\.([0-9a-f]{64})$/.exec(req.headers.get("x-api-token") ?? "");
+  if (!m) throw new HttpError(401, "API key 錯誤");
+  const sig = createHmac("sha256", expected).update(`lookup:${m[1]}`).digest("hex");
+  if (!sameText(m[2], sig)) throw new HttpError(401, "通行證錯誤");
+  const age = Math.floor(Date.now() / 1000) - Number(m[1]);
+  if (age > TOKEN_TTL || age < -60) throw new HttpError(401, "通行證已過期，請重新整理頁面");
+}
+
+/** 允許跨網域呼叫的網頁（甜柿訂購系統） */
+const CORS_ORIGINS = ["http://www.ll3.com.tw", "http://ll3.com.tw", "https://www.ll3.com.tw", "https://ll3.com.tw"];
+
+export function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") ?? "";
+  if (!CORS_ORIGINS.includes(origin)) return {};
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "x-api-token",
+    "Access-Control-Max-Age": "600",
+    Vary: "Origin",
+  };
 }
 
 const MAX_ORDERS = 30;
