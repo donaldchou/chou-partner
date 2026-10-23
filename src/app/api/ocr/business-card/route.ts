@@ -3,7 +3,7 @@ import { HttpError, handleError, readJson } from "@/lib/api";
 import { requireAdmin } from "@/lib/auth";
 import { geminiJson } from "@/lib/gemini";
 import { mockCards } from "@/lib/mock-data";
-import { isBlobUrl } from "@/lib/blob";
+import { isStoredUrl, readStored } from "@/lib/storage";
 
 export type CardFields = {
   company: string;
@@ -28,20 +28,19 @@ company 公司或單位名稱、name 姓名（中文優先）、title 職稱、p
 email、address 地址（完整中文地址）、lineName LINE ID 或名稱。看不到的欄位回傳空字串，不要猜測。`;
 
 /**
- * POST /api/ocr/business-card  { url }（先用 /api/upload 上傳名片到 Vercel Blob）
+ * POST /api/ocr/business-card  { url }（先用 /api/upload 上傳名片到 ll3 主機）
  * 有設定 GEMINI_API_KEY 時用 AI 辨識；沒有設定時回傳示範資料並標記 mock: true。
  */
 export async function POST(req: Request) {
   try {
     await requireAdmin();
     const { url } = await readJson(req);
-    if (!isBlobUrl(url)) throw new HttpError(400, "請傳入這個平台上傳的名片網址");
+    if (!isStoredUrl(url)) throw new HttpError(400, "請傳入這個平台上傳的名片網址");
 
-    const img = await fetch(url, { signal: AbortSignal.timeout(20_000) });
-    if (!img.ok) throw new HttpError(404, "找不到名片圖片");
-    const contentType = img.headers.get("content-type") ?? "";
+    const img = await readStored(url);
+    const contentType = img.contentType;
     if (!contentType.startsWith("image/")) throw new HttpError(400, "名片必須是圖片");
-    const base64 = Buffer.from(await img.arrayBuffer()).toString("base64");
+    const base64 = Buffer.from(await new Response(img.body).arrayBuffer()).toString("base64");
     const result = await geminiJson<CardFields>([{ text: PROMPT }, { inlineData: { mimeType: contentType, data: base64 } }], SCHEMA);
 
     if (!result) {

@@ -13,6 +13,7 @@ import { itemsText } from "@/lib/calc";
 import { alertError, customersApi, type CustomerWithOrders } from "@/lib/store";
 import type { Customer } from "@/lib/types";
 import { useFetch } from "@/lib/use-fetch";
+import { photoSrc } from "@/lib/upload";
 import { formatDate, money } from "@/lib/utils";
 
 export default function CustomerDetailPage() {
@@ -154,7 +155,7 @@ export default function CustomerDetailPage() {
             <Card>
               <SectionTitle>名片</SectionTitle>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={c.cardImage} alt="名片" className="w-full rounded-lg border border-slate-200" />
+              <img src={photoSrc(c.cardImage)} alt="名片" className="w-full rounded-lg border border-slate-200" />
             </Card>
           )}
           <Button variant="danger" className="w-full" onClick={() => remove(c)}>

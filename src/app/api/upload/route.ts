@@ -1,41 +1,56 @@
 import { NextResponse } from "next/server";
-import { HttpError, handleError, readFile } from "@/lib/api";
+import { HttpError, handleError } from "@/lib/api";
 import { requireAdmin } from "@/lib/auth";
-import { uploadBlob } from "@/lib/blob";
+import { LL3_PREFIX, ll3Done, ll3PutAll } from "@/lib/ll3";
+import { FILE_TYPES, extOf, newFilePath } from "@/lib/storage";
 
-// Vercel 伺服器上傳的 body 上限約 4.5MB；照片在前端會先壓縮成 JPEG（約 100–300KB）
-const MAX_BYTES = 4 * 1024 * 1024;
-
-/** 允許上傳的檔案：圖片（名片、照片）與宅配單常見格式 */
-const ALLOWED = [
-  /^image\/(jpeg|png|webp|gif|heic|heif)$/,
-  /^application\/pdf$/,
-  /^text\/csv$/,
-  /^application\/vnd\.ms-excel$/,
-  /^application\/vnd\.openxmlformats-officedocument\.(spreadsheetml\.sheet|wordprocessingml\.document)$/,
-  /^application\/msword$/,
-];
-const EXT_TYPES: Record<string, string> = { csv: "text/csv", xls: "application/vnd.ms-excel", pdf: "application/pdf" };
+/** 瀏覽器每次最多送 3MB（Vercel 請求上限約 4.5MB），伺服器再切成 ll3 主機能收的小塊 */
+const MAX_PART = 3 * 1024 * 1024;
+const MAX_FILE = 30 * 1024 * 1024;
+/** 每個瀏覽器分段最多切成 100 塊以內，塊號 = index * 100 + j，合併時依塊號排序 */
+const SUB_PER_PART = 100;
 
 /**
- * POST /api/upload（multipart：file、folder = cards | people | shipping…）
- * 上傳到 Vercel Blob，回傳 { url, name, size, contentType }；把 url 存進 MongoDB 的欄位
+ * POST /api/upload（multipart/form-data），上傳到 ll3 主機。小檔案一次送完，大檔案分段送：
+ *   file      這一段的內容
+ *   uploadId  同一個檔案的每一段都相同（16–40 個小寫英數字，由瀏覽器產生）
+ *   index     第幾段（從 0 開始）
+ *   last      最後一段送 "1"，伺服器合併檔案
+ *   name      原始檔名（決定副檔名）
+ *   size      整個檔案的大小
+ *   folder    資料夾：cards | people | shipping…
+ * 最後一段回傳：{ url: "ll3:folder/xxx.ext", name, size, contentType }，把 url 存進 MongoDB
  */
 export async function POST(req: Request) {
   try {
     await requireAdmin();
-    const { file, form } = await readFile(req, "file", MAX_BYTES);
-    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-    // 有些瀏覽器不給 csv / xls 的 MIME type，用副檔名補
-    const contentType = file.type || EXT_TYPES[ext] || "application/octet-stream";
-    if (!ALLOWED.some((re) => re.test(contentType))) {
-      throw new HttpError(415, `不支援的檔案格式（${contentType}），請上傳圖片、PDF、Excel、CSV 或 Word`);
+    const form = await req.formData().catch(() => {
+      throw new HttpError(400, "請用 multipart/form-data 上傳");
+    });
+    const file = form.get("file");
+    if (!(file instanceof Blob) || file.size === 0) throw new HttpError(400, "缺少檔案");
+    if (file.size > MAX_PART) throw new HttpError(413, "每段上限 3MB");
+
+    const uploadId = String(form.get("uploadId") ?? "");
+    if (!/^[a-z0-9]{16,40}$/.test(uploadId)) throw new HttpError(400, "uploadId 格式錯誤");
+    const index = Number(form.get("index") ?? 0);
+    if (!Number.isInteger(index) || index < 0 || index > 999) throw new HttpError(400, "index 格式錯誤");
+    const name = String(form.get("name") ?? "").slice(0, 200);
+    const ext = extOf(name);
+    if (!FILE_TYPES[ext]) {
+      throw new HttpError(415, `不支援的檔案格式（.${ext}），請上傳圖片（JPG、PNG）、PDF、Excel、CSV 或 Word`);
     }
-    const folder = String(form.get("folder") ?? "files").replace(/[^a-z0-9-]/gi, "") || "files";
-    // 中文檔名放進網址容易出問題，Blob 路徑用日期 + 副檔名，原始檔名另外回傳
-    const name = `${new Date().toISOString().slice(0, 10)}${ext ? "." + ext.replace(/[^a-z0-9]/g, "") : ""}`;
-    const url = await uploadBlob(new Blob([await file.arrayBuffer()], { type: contentType }), folder, name);
-    return NextResponse.json({ url, name: file.name, size: file.size, contentType }, { status: 201 });
+    const size = Number(form.get("size") ?? 0);
+    if (!Number.isInteger(size) || size <= 0) throw new HttpError(400, "size 格式錯誤");
+    if (size > MAX_FILE) throw new HttpError(413, "檔案太大（上限 30MB）");
+
+    await ll3PutAll(uploadId, new Uint8Array(await file.arrayBuffer()), index * SUB_PER_PART);
+    if (form.get("last") !== "1") return NextResponse.json({ ok: true });
+
+    const folder = String(form.get("folder") ?? "files").replace(/[^a-z0-9-]/gi, "").toLowerCase() || "files";
+    const path = newFilePath(folder, ext === "jpeg" ? "jpg" : ext);
+    await ll3Done(uploadId, path, size);
+    return NextResponse.json({ url: LL3_PREFIX + path, name, size, contentType: FILE_TYPES[ext] }, { status: 201 });
   } catch (err) {
     return handleError(err);
   }

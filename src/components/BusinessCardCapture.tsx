@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { Camera, IdCard } from "lucide-react";
 import { api } from "@/lib/store";
-import { uploadImage } from "@/lib/upload";
+import { photoSrc, uploadImage } from "@/lib/upload";
 import { Button, DemoNote } from "./ui";
 
 export type CardResult = {
@@ -87,7 +87,7 @@ export default function BusinessCardCapture({
       {image ? (
         <div className="flex flex-col gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt="名片" className="max-h-56 w-full rounded-lg border border-slate-200 bg-white object-contain" />
+          <img src={photoSrc(image)} alt="名片" className="max-h-56 w-full rounded-lg border border-slate-200 bg-white object-contain" />
           <div className="flex flex-col gap-2">
             <Button onClick={() => recognize()} disabled={!!busy}>
               {busy === "ocr" ? "辨識中…" : done ? "✓ 重新辨識" : "🔍 辨識名片並帶入資料"}

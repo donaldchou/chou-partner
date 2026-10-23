@@ -13,7 +13,6 @@
     "restore": "tsx scripts/restore-db.ts"
   },
   "dependencies": {
-    "@vercel/blob": "^2.8.1",
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.12",
     "lucide-react": "^1.55.0",

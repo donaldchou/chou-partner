@@ -255,7 +255,7 @@ export interface ShippingBackup {
   count?: number;
   /** 系統產生時保留當下的收件人快照，可重新列印 / 下載 */
   rows?: Recipient[];
-  /** 業者提供的檔案（Vercel Blob 網址） */
+  /** 業者提供的檔案（ll3 主機網址 "ll3:..."） */
   fileUrl?: string;
 }
 

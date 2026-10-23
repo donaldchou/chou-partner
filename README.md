@@ -7,7 +7,7 @@
 | 變數 | 必填 | 說明 |
 | --- | --- | --- |
 | `MONGODB_URI` | ✓ | MongoDB Atlas 連線字串 |
-| `BLOB_READ_WRITE_TOKEN` | ✓ | Vercel Blob（public store），存名片、照片、宅配單檔案 |
+| `LL3_FILE_KEY` | ✓ | ll3 檔案主機簽章金鑰（同 `file_api_partner.asp` 的 FILE_API_KEY），存名片、照片、宅配單檔案 |
 | `JWT_SECRET` | ✓ | 登入 JWT 的簽章密鑰（至少 32 個字元的隨機字串）；部署到 Vercel 時也要設定 |
 | `ADMIN_CODE` | ✓ | 後台驗證碼；輸入正確後 1 小時內所有需要驗證碼的功能都不用再輸入 |
 | `GEMINI_API_KEY` | | 名片 AI 辨識、無表格 Word 的 AI 整理；沒設定時名片辨識回傳示範資料 |
@@ -49,12 +49,13 @@ src/lib/orders-repo.ts     訂單：分頁搜尋、自動編號、金額重算�
 src/lib/customer-stats.ts  依訂單重算客戶的訂單數、累計金額、回購客標籤
 src/lib/legacy/            歷年資料匯入：mdb.ts（舊網站）、word.ts（電話訂單規則解析）、importer.ts（合併寫入）
 src/lib/collections.ts     通用 CRUD 的集合：products / agencies / bookings / groupBuys
-src/lib/blob.ts            Vercel Blob 上傳；資料更新／刪除時自動刪掉不再使用的檔案
+src/lib/ll3.ts             ll3 檔案主機 API（簽章、分塊上傳、讀取、刪除）
+src/lib/storage.ts         檔案網址處理；資料更新／刪除時自動刪掉不再使用的檔案
 src/lib/store.ts           前端：小集合啟動時載入 /api/db；客戶與訂單用分頁 API
 scripts/import-legacy.ts   命令列匯入
 ```
 
-照片與檔案存在 Vercel Blob，MongoDB 只存檔案網址；所有文件使用字串 `_id`，API 輸出時轉成 `id`。日期時間一律存台灣當地時間字串（`YYYY-MM-DD`、`YYYY-MM-DDTHH:mm`）。
+照片與檔案存在 ll3 主機 `http://www.ll3.com.tw/platform/chou_partner/<folder>/`（`file_api_partner.asp`，原始碼在 chou-suda-print\platform_change_code，與 chou-platform 共用寫法；資料夾有 web.config 擋直接下載），MongoDB 只存 `ll3:<folder>/<name>`，顯示照片經過 `/api/photo`、下載檔案經過 `/api/file`（分段，每段 3MB）；所有文件使用字串 `_id`，API 輸出時轉成 `id`。日期時間一律存台灣當地時間字串（`YYYY-MM-DD`、`YYYY-MM-DDTHH:mm`）。
 
 資料設計與歷年資料分析見 [docs/legacy-orders-schema.md](docs/legacy-orders-schema.md)。
 
@@ -90,7 +91,9 @@ scripts/import-legacy.ts   命令列匯入
 | --- | --- | --- |
 | GET | `/api/db` | 一次取得小集合（products / agencies / bookings / groupBuys） |
 | GET / POST / PUT / DELETE | `/api/<collection>[/<id>]` | 上述小集合的通用 CRUD；旅行社有預約時刪除需 `?cascade=true` |
-| POST | `/api/upload` | multipart `file`、`folder` → Vercel Blob，回傳 `{ url, name, size, contentType }`；單檔 4MB |
+| POST | `/api/upload` | multipart `file`、`uploadId`、`index`、`last`、`name`、`size`、`folder` → ll3 主機（大檔案分段，每段 3MB，單檔 30MB），最後一段回傳 `{ url, name, size, contentType }` |
+| GET | `/api/photo?url=` | 讀取照片 |
+| GET | `/api/file?url=&part=` | 分段讀取檔案（每段 3MB，`X-File-Size` 是總大小） |
 | POST | `/api/ocr/business-card` | `{ url }` → 名片欄位；`mock: true` 表示未設定 Gemini |
 | POST | `/api/import/parse` | multipart `file`、`kind`=mdb\|word → 統計與前 200 筆預覽（不寫入） |
 | POST | `/api/import/commit` | 同上 → 寫入；已匯入的略過，客戶依電話合併 |

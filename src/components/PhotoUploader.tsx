@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { uploadImage } from "@/lib/upload";
+import { photoSrc, uploadImage } from "@/lib/upload";
 
 /** 多張照片上傳（領隊、司機用） */
 export default function PhotoUploader({ photos, onChange }: { photos: string[]; onChange: (p: string[]) => void }) {
@@ -27,7 +27,7 @@ export default function PhotoUploader({ photos, onChange }: { photos: string[]; 
           <div key={i} className="group relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={p}
+              src={photoSrc(p)}
               alt={`照片 ${i + 1}`}
               onClick={() => setPreview(p)}
               className="h-20 w-20 cursor-zoom-in rounded-lg border border-slate-200 object-cover"
@@ -66,7 +66,7 @@ export default function PhotoUploader({ photos, onChange }: { photos: string[]; 
       {preview && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" onClick={() => setPreview(null)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="預覽" className="max-h-full max-w-full rounded-lg" />
+          <img src={photoSrc(preview)} alt="預覽" className="max-h-full max-w-full rounded-lg" />
         </div>
       )}
     </div>
@@ -83,7 +83,7 @@ export function PhotoStrip({ photos }: { photos: string[] }) {
           // eslint-disable-next-line @next/next/no-img-element
           <img
             key={i}
-            src={p}
+            src={photoSrc(p)}
             alt=""
             onClick={() => setPreview(p)}
             className="h-12 w-12 cursor-zoom-in rounded-md border border-slate-200 object-cover"
@@ -93,7 +93,7 @@ export function PhotoStrip({ photos }: { photos: string[] }) {
       {preview && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" onClick={() => setPreview(null)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="預覽" className="max-h-full max-w-full rounded-lg" />
+          <img src={photoSrc(preview)} alt="預覽" className="max-h-full max-w-full rounded-lg" />
         </div>
       )}
     </>

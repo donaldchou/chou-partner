@@ -8,6 +8,7 @@ import PeopleSection from "@/components/PeopleSection";
 import { BookingStatusBadge } from "@/components/BookingBadges";
 import { Button, Card, Empty, LinkButton, Loading, NotFound, PageHeader, SectionTitle } from "@/components/ui";
 import { actions, useAppState, useLoaded } from "@/lib/store";
+import { photoSrc } from "@/lib/upload";
 import { formatDateTime, money } from "@/lib/utils";
 
 export default function AgencyDetailPage() {
@@ -77,7 +78,7 @@ export default function AgencyDetailPage() {
             </dl>
             {a.cardImage && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={a.cardImage} alt="名片" className="mt-4 max-h-48 rounded-lg border border-slate-200" />
+              <img src={photoSrc(a.cardImage)} alt="名片" className="mt-4 max-h-48 rounded-lg border border-slate-200" />
             )}
           </Card>
 

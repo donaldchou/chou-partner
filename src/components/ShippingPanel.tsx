@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { actions } from "@/lib/store";
-import { uploadFile } from "@/lib/upload";
+import { openStoredFile, uploadFile } from "@/lib/upload";
 import type { GroupBuy, Recipient, ShippingBackup } from "@/lib/types";
 import { downloadText, FARM, formatDate, formatDateTime, nowStr, toCsv, uid } from "@/lib/utils";
 import { SHIPPING_MODES } from "./GroupBuyForm";
@@ -57,12 +57,9 @@ export default function ShippingPanel({ g }: { g: GroupBuy }) {
                       </Button>
                     </>
                   ) : b.fileUrl ? (
-                    <a
-                      href={`${b.fileUrl}?download=1`}
-                      className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
-                    >
+                    <Button variant="ghost" onClick={() => openStoredFile(b.fileUrl!, b.fileName)}>
                       下載
-                    </a>
+                    </Button>
                   ) : (
                     <span className="px-3.5 text-xs text-slate-400">（無檔案）</span>
                   )}
@@ -122,7 +119,7 @@ function UploadBox({ onUploaded }: { onUploaded: (b: ShippingBackup[]) => void }
         className="flex w-full flex-col items-center gap-1 rounded-xl border-2 border-dashed border-slate-300 py-8 text-slate-500 hover:border-brand-400 hover:text-brand-700 disabled:cursor-wait"
       >
         <span className="text-3xl">📄</span>
-        <span>{busy ? "上傳中…" : "點此選擇檔案（Excel、CSV、PDF 或照片，可多選，單檔 10MB 以內）"}</span>
+        <span>{busy ? "上傳中…" : "點此選擇檔案（Excel、CSV、PDF 或照片，可多選，單檔 30MB 以內）"}</span>
       </button>
     </Card>
   );

@@ -1,7 +1,7 @@
 import { CustomerModel } from "@/models/customer";
 import { OrderModel } from "@/models/order";
 import { HttpError, fromClient, toClient } from "./api";
-import { assertNoInlineFiles, collectBlobUrls, deleteBlobs, deleteRemovedBlobs } from "./blob";
+import { assertNoInlineFiles, collectFileUrls, deleteFiles, deleteRemovedFiles } from "./storage";
 import { sharedPhones, suspectFilter, suspectReasons, suspectReasonsOf } from "./customer-quality";
 import { recomputeStats } from "./customer-stats";
 import { connectDB } from "./mongodb";
@@ -162,7 +162,7 @@ export async function saveCustomer(id: string, body: Data) {
   const keep = before as { stats?: unknown; invalid?: unknown; suspectChecked?: boolean };
   doc.overwrite({ ...data, _id: id, stats: keep.stats, invalid: keep.invalid ?? null, suspectChecked: !!keep.suspectChecked });
   await doc.save();
-  await deleteRemovedBlobs(before, data);
+  await deleteRemovedFiles(before, data);
   return { doc: toClient(doc.toObject()), created: false };
 }
 
@@ -183,7 +183,7 @@ export async function deleteCustomer(id: string, cascade: boolean) {
   const orders = await OrderModel.find({ customerId: id }).lean();
   await OrderModel.deleteMany({ customerId: id });
   await CustomerModel.deleteOne({ _id: id });
-  await deleteBlobs([...collectBlobUrls(doc), ...collectBlobUrls(orders)]);
+  await deleteFiles([...collectFileUrls(doc), ...collectFileUrls(orders)]);
 }
 
 /** POST /api/customers/<id>/merge { from: 另一位客戶 id }：把重複的客戶併進來，訂單一起移過來 */

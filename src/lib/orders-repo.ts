@@ -1,7 +1,7 @@
 import { CustomerModel } from "@/models/customer";
 import { OrderModel } from "@/models/order";
 import { HttpError, fromClient, toClient } from "./api";
-import { assertNoInlineFiles, collectBlobUrls, deleteBlobs, deleteRemovedBlobs } from "./blob";
+import { assertNoInlineFiles, collectFileUrls, deleteFiles, deleteRemovedFiles } from "./storage";
 import { suspectFilter } from "./customer-quality";
 import { recomputeStats } from "./customer-stats";
 import { connectDB } from "./mongodb";
@@ -126,7 +126,7 @@ export async function saveOrder(id: string, body: Data) {
   doc.overwrite({ ...data, _id: id });
   await doc.save();
   await recomputeStats([before.customerId, String(data.customerId)]);
-  await deleteRemovedBlobs(before, data);
+  await deleteRemovedFiles(before, data);
   return { doc: toClient(doc.toObject()), created: false };
 }
 
@@ -140,7 +140,7 @@ export async function deleteOrder(id: string) {
   if (!doc) throw new HttpError(404, "找不到訂單");
   await OrderModel.deleteOne({ _id: id });
   await recomputeStats([doc.customerId]);
-  await deleteBlobs(collectBlobUrls(doc));
+  await deleteFiles(collectFileUrls(doc));
 }
 
 /** GET /api/stats：儀表板統計 */

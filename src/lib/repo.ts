@@ -1,7 +1,7 @@
 import { AgencyModel, BookingModel } from "@/models/tour";
 import { HttpError, fromClient, toClient } from "./api";
 import { COLLECTIONS, DATE_FIELD, FILTERS, SEARCH_FIELDS, SORT, type CollectionName } from "./collections";
-import { assertNoInlineFiles, collectBlobUrls, deleteBlobs, deleteRemovedBlobs } from "./blob";
+import { assertNoInlineFiles, collectFileUrls, deleteFiles, deleteRemovedFiles } from "./storage";
 import { connectDB } from "./mongodb";
 import type { AppState, Person } from "./types";
 import { uid } from "./utils";
@@ -132,7 +132,7 @@ export async function saveDoc(name: CollectionName, id: string, body: Data) {
   doc.overwrite({ ...data, _id: id });
   await doc.save();
   await afterWrite(name, id, data);
-  await deleteRemovedBlobs(before, data);
+  await deleteRemovedFiles(before, data);
   return { doc: toClient(doc.toObject()), created: false };
 }
 
@@ -152,5 +152,5 @@ export async function deleteDoc(name: CollectionName, id: string, cascade: boole
   }
 
   await Model.deleteOne({ _id: id });
-  await deleteBlobs(collectBlobUrls(doc));
+  await deleteFiles(collectFileUrls(doc));
 }
