@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { Camera, IdCard } from "lucide-react";
 import { api } from "@/lib/store";
-import { photoSrc, uploadImage } from "@/lib/upload";
+import { discardUpload, photoSrc, uploadImage } from "@/lib/upload";
 import { Button, DemoNote } from "./ui";
 
 export type CardResult = {
@@ -38,6 +38,8 @@ export default function BusinessCardCapture({
     setBusy("upload");
     try {
       const { url } = await uploadImage(file, "cards", 1600, 0.85);
+      // 重新拍照：換掉的那張若還沒存進資料就刪掉
+      discardUpload(image);
       onImage(url);
       await recognize(url);
     } catch (e) {
@@ -98,6 +100,7 @@ export default function BusinessCardCapture({
             <Button
               variant="ghost"
               onClick={() => {
+                discardUpload(image);
                 onImage(undefined);
                 setDone(false);
               }}

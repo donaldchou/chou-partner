@@ -1,6 +1,10 @@
 import { randomBytes } from "node:crypto";
+import { CustomerModel } from "@/models/customer";
+import { GroupBuyModel } from "@/models/group-buy";
+import { AgencyModel } from "@/models/tour";
 import { HttpError } from "./api";
 import { LL3_PREFIX, isLl3Url, ll3Delete, ll3Get } from "./ll3";
+import { connectDB } from "./mongodb";
 
 /** 照片與檔案都存在 ll3 主機，MongoDB 存 "ll3:<folder>/<name>" */
 export const isStoredUrl = isLl3Url;
@@ -57,6 +61,17 @@ export async function deleteFiles(urls: Iterable<string>) {
   if (!list.length) return;
   const results = await Promise.allSettled(list.map((u) => ll3Delete(u.slice(LL3_PREFIX.length))));
   for (const r of results) if (r.status === "rejected") console.warn("刪除檔案失敗：", r.reason);
+}
+
+/** 已儲存的資料是否用到這個檔案（存檔案網址的欄位都要列在這裡） */
+export async function isFileReferenced(url: string) {
+  await connectDB();
+  const found = await Promise.all([
+    CustomerModel.exists({ cardImage: url }),
+    AgencyModel.exists({ $or: [{ cardImage: url }, { "people.photos": url }] }),
+    GroupBuyModel.exists({ $or: [{ cardImage: url }, { "backups.fileUrl": url }] }),
+  ]);
+  return found.some(Boolean);
 }
 
 /** 文件更新後，刪掉舊版有、新版沒有的檔案 */

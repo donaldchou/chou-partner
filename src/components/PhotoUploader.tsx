@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { photoSrc, uploadImage } from "@/lib/upload";
+import { discardUpload, photoSrc, uploadImage } from "@/lib/upload";
 
 /** 多張照片上傳（領隊、司機用） */
 export default function PhotoUploader({ photos, onChange }: { photos: string[]; onChange: (p: string[]) => void }) {
@@ -34,7 +34,10 @@ export default function PhotoUploader({ photos, onChange }: { photos: string[]; 
             />
             <button
               type="button"
-              onClick={() => onChange(photos.filter((_, j) => j !== i))}
+              onClick={() => {
+                discardUpload(p);
+                onChange(photos.filter((_, j) => j !== i));
+              }}
               className="absolute -right-1.5 -top-1.5 hidden h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white group-hover:flex"
               aria-label="刪除照片"
             >

@@ -40,6 +40,15 @@ export async function uploadFile(
   return result;
 }
 
+/**
+ * 表單裡移除／換掉檔案時呼叫：還沒存進資料的檔案馬上從 ll3 主機刪掉；
+ * 已儲存的資料在用的檔案伺服器會保留，等按「儲存」時才刪（按取消就留著）。失敗不影響表單。
+ */
+export function discardUpload(url: string | undefined) {
+  if (!url?.startsWith("ll3:")) return;
+  fetch(`/api/upload?url=${encodeURIComponent(url)}`, { method: "DELETE" }).catch(() => {});
+}
+
 /** 把 MongoDB 裡的檔案網址轉成 <img> 可用的網址（ll3 主機的檔案要經過 /api/photo） */
 export const photoSrc = (url: string) => (url.startsWith("ll3:") ? `/api/photo?url=${encodeURIComponent(url)}` : url);
 

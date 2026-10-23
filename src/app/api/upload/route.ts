@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { HttpError, handleError } from "@/lib/api";
 import { requireAdmin } from "@/lib/auth";
 import { LL3_PREFIX, ll3Done, ll3PutAll } from "@/lib/ll3";
-import { FILE_TYPES, extOf, newFilePath } from "@/lib/storage";
+import { FILE_TYPES, deleteFiles, extOf, isFileReferenced, isStoredUrl, newFilePath } from "@/lib/storage";
 
 /** 瀏覽器每次最多送 3MB（Vercel 請求上限約 4.5MB），伺服器再切成 ll3 主機能收的小塊 */
 const MAX_PART = 3 * 1024 * 1024;
@@ -51,6 +51,23 @@ export async function POST(req: Request) {
     const path = newFilePath(folder, ext === "jpeg" ? "jpg" : ext);
     await ll3Done(uploadId, path, size);
     return NextResponse.json({ url: LL3_PREFIX + path, name, size, contentType: FILE_TYPES[ext] }, { status: 201 });
+  } catch (err) {
+    return handleError(err);
+  }
+}
+
+/**
+ * DELETE /api/upload?url=ll3:...  丟掉剛上傳、還沒存進資料的檔案（表單裡按移除名片、移除照片、重新拍照時）。
+ * 已儲存的資料還在用的檔案不會刪（那些在資料儲存或刪除時才刪），回傳 { deleted }。
+ */
+export async function DELETE(req: Request) {
+  try {
+    await requireAdmin();
+    const url = new URL(req.url).searchParams.get("url");
+    if (!isStoredUrl(url)) throw new HttpError(400, "不是這個平台的檔案網址");
+    if (await isFileReferenced(url)) return NextResponse.json({ deleted: false });
+    await deleteFiles([url]);
+    return NextResponse.json({ deleted: true });
   } catch (err) {
     return handleError(err);
   }
