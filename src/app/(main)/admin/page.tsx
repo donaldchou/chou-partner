@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, KeyRound, Plus, Search, Trash2 } from "lucide-react";
+import { Eye, KeyRound, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import {
   Badge,
@@ -19,10 +19,11 @@ import {
 } from "@/components/ui";
 import { UnlockPanel } from "@/components/unlock";
 import { alertError, api, isCancelled, useMe } from "@/lib/store";
+import { openStoredFile, photoSrc } from "@/lib/upload";
 import { useFetch } from "@/lib/use-fetch";
 import { cn } from "@/lib/utils";
 
-type Tab = "users" | "data";
+type Tab = "users" | "data" | "files";
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("users");
@@ -36,9 +37,10 @@ export default function AdminPage() {
         tabs={[
           { value: "users", label: "使用者管理" },
           { value: "data", label: "所有資料" },
+          { value: "files", label: "清理未使用的檔案" },
         ]}
       />
-      {tab === "users" ? <UsersTab /> : <DataTab />}
+      {tab === "users" ? <UsersTab /> : tab === "data" ? <DataTab /> : <FilesTab />}
     </div>
   );
 }
@@ -295,6 +297,102 @@ function PasswordModal({ user, onClose, onSave }: { user: User; onClose: () => v
         {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       </form>
     </Modal>
+  );
+}
+
+/* ---------------- 清理未使用的檔案 ---------------- */
+
+type HostFile = { url: string; size: number; time: string; used: boolean; recent: boolean };
+type FileScan = { total: number; totalBytes: number; used: number; unused: HostFile[] };
+
+const FOLDERS: Record<string, string> = { cards: "名片", people: "領隊／司機照片", shipping: "宅配單" };
+
+const fmtSize = (n: number) =>
+  n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
+
+function FilesTab() {
+  const { data, loading, error, reload } = useFetch("admin-files", () => api<FileScan>("/api/admin/files"));
+  const [busy, setBusy] = useState(false);
+  const removable = data?.unused.filter((f) => !f.recent) ?? [];
+  const recent = (data?.unused.length ?? 0) - removable.length;
+
+  async function clean() {
+    if (!confirm(`確定刪除 ${removable.length} 個未使用的檔案（${fmtSize(removable.reduce((s, f) => s + f.size, 0))}）？刪除後無法復原。`)) return;
+    setBusy(true);
+    try {
+      const r = await api<{ deleted: number; failed: number }>("/api/admin/files", { method: "DELETE" });
+      alert(`已刪除 ${r.deleted} 個檔案${r.failed ? `，${r.failed} 個刪除失敗` : ""}`);
+      reload();
+    } catch (e) {
+      alertError("清理失敗", e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="max-w-3xl text-sm text-slate-500">
+          比對 ll3 主機上的照片與檔案和資料庫，找出沒有被任何客戶、旅行社、團購用到的檔案（例如上傳名片後按了取消）。
+          24 小時內上傳的先保留，因為可能還有表單正在填寫。
+        </p>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={reload} disabled={loading || busy}>
+            <RefreshCw size={15} /> 重新檢查
+          </Button>
+          <Button variant="dangerSolid" onClick={clean} disabled={!removable.length || busy || loading}>
+            <Trash2 size={15} /> {busy ? "刪除中…" : `刪除 ${removable.length} 個未使用的檔案`}
+          </Button>
+        </div>
+      </div>
+      {error && <p className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {data && (
+        <p className="mb-3 text-sm text-slate-700">
+          主機上共 {data.total} 個檔案（{fmtSize(data.totalBytes)}），使用中 {data.used} 個，未使用 {data.unused.length} 個
+          {recent > 0 && <span className="text-slate-500">（其中 {recent} 個是 24 小時內上傳的，暫不刪除）</span>}。
+        </p>
+      )}
+      <Table head={["預覽", "類別", "檔名", "大小", "上傳時間", "狀態"]}>
+        {data?.unused.map((f) => {
+          const [folder, name] = f.url.slice(4).split("/");
+          const isImage = /\.(jpe?g|png|webp|gif)$/i.test(name);
+          return (
+            <tr key={f.url} className="hover:bg-slate-50">
+              <Td>
+                {isImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={photoSrc(f.url)} alt="" loading="lazy" className="h-12 w-12 rounded-md border border-slate-200 object-cover" />
+                ) : (
+                  <button className="text-xs text-brand-700 hover:underline" onClick={() => openStoredFile(f.url, name)}>
+                    開啟
+                  </button>
+                )}
+              </Td>
+              <Td>{FOLDERS[folder] ?? folder}</Td>
+              <Td className="font-mono text-xs text-slate-500">{name}</Td>
+              <Td className="whitespace-nowrap text-slate-600">{fmtSize(f.size)}</Td>
+              <Td className="whitespace-nowrap text-slate-600">{fmtTime(f.time)}</Td>
+              <Td>{f.recent ? <Badge color="amber">24 小時內，保留</Badge> : <Badge color="red">可刪除</Badge>}</Td>
+            </tr>
+          );
+        })}
+        {data && !data.unused.length && (
+          <tr>
+            <Td colSpan={6} className="py-8 text-center text-slate-400">
+              沒有未使用的檔案
+            </Td>
+          </tr>
+        )}
+        {!data && !error && (
+          <tr>
+            <Td colSpan={6} className="py-8 text-center text-slate-400">
+              檢查中…
+            </Td>
+          </tr>
+        )}
+      </Table>
+    </>
   );
 }
 

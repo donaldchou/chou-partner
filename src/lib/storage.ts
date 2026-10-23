@@ -3,7 +3,7 @@ import { CustomerModel } from "@/models/customer";
 import { GroupBuyModel } from "@/models/group-buy";
 import { AgencyModel } from "@/models/tour";
 import { HttpError } from "./api";
-import { LL3_PREFIX, isLl3Url, ll3Delete, ll3Get } from "./ll3";
+import { LL3_PREFIX, isLl3Url, ll3Delete, ll3Get, ll3List } from "./ll3";
 import { connectDB } from "./mongodb";
 
 /** 照片與檔案都存在 ll3 主機，MongoDB 存 "ll3:<folder>/<name>" */
@@ -55,23 +55,60 @@ export function collectFileUrls(value: unknown, out = new Set<string>()): Set<st
   return out;
 }
 
-/** 刪除不再使用的檔案。失敗只記錄，不影響資料庫操作。 */
+/** 刪除不再使用的檔案。失敗只記錄，不影響資料庫操作；回傳刪除失敗的數量。 */
 export async function deleteFiles(urls: Iterable<string>) {
   const list = [...urls];
-  if (!list.length) return;
+  if (!list.length) return 0;
   const results = await Promise.allSettled(list.map((u) => ll3Delete(u.slice(LL3_PREFIX.length))));
-  for (const r of results) if (r.status === "rejected") console.warn("刪除檔案失敗：", r.reason);
+  const failed = results.filter((r) => r.status === "rejected");
+  for (const r of failed) console.warn("刪除檔案失敗：", r.reason);
+  return failed.length;
 }
 
-/** 已儲存的資料是否用到這個檔案（存檔案網址的欄位都要列在這裡） */
+/** 存檔案網址的欄位（新增有檔案的欄位時一定要加在這裡，否則檔案會被當成沒用到而刪掉） */
+const FILE_FIELDS = [
+  { model: CustomerModel, paths: ["cardImage"] },
+  { model: AgencyModel, paths: ["cardImage", "people.photos"] },
+  { model: GroupBuyModel, paths: ["cardImage", "backups.fileUrl"] },
+];
+
+/** 已儲存的資料是否用到這個檔案 */
 export async function isFileReferenced(url: string) {
   await connectDB();
-  const found = await Promise.all([
-    CustomerModel.exists({ cardImage: url }),
-    AgencyModel.exists({ $or: [{ cardImage: url }, { "people.photos": url }] }),
-    GroupBuyModel.exists({ $or: [{ cardImage: url }, { "backups.fileUrl": url }] }),
-  ]);
+  const found = await Promise.all(FILE_FIELDS.map(({ model, paths }) => model.exists({ $or: paths.map((p) => ({ [p]: url })) })));
   return found.some(Boolean);
+}
+
+/** 已儲存的資料用到的所有檔案網址 */
+async function referencedFiles() {
+  await connectDB();
+  const used = new Set<string>();
+  for (const { model, paths } of FILE_FIELDS) {
+    const docs = await model
+      .find({ $or: paths.map((p) => ({ [p]: { $regex: `^${LL3_PREFIX}` } })) }, Object.fromEntries(paths.map((p) => [p, 1])))
+      .lean();
+    collectFileUrls(docs, used);
+  }
+  return used;
+}
+
+/** 上傳後這麼久還沒被資料用到，才算「未使用」（避免刪到還在填寫中的表單剛上傳的檔案） */
+export const UNUSED_AFTER_HOURS = 24;
+
+export type HostFile = { url: string; size: number; time: string; used: boolean; recent: boolean };
+
+/** 比對 ll3 主機上的檔案和資料庫：先列主機再查資料庫，列出之後才存進資料的檔案也會算使用中 */
+export async function scanFiles(): Promise<HostFile[]> {
+  const files = await ll3List();
+  const used = await referencedFiles();
+  const limit = Date.now() / 1000 - UNUSED_AFTER_HOURS * 3600;
+  return files.map((f) => ({
+    url: LL3_PREFIX + f.p,
+    size: f.size,
+    time: new Date(f.t * 1000).toISOString(),
+    used: used.has(LL3_PREFIX + f.p),
+    recent: f.t > limit,
+  }));
 }
 
 /** 文件更新後，刪掉舊版有、新版沒有的檔案 */
