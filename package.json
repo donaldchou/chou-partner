@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "import:legacy": "tsx scripts/import-legacy.ts",
-    "create-admin": "tsx scripts/create-admin.ts"
+    "create-admin": "tsx scripts/create-admin.ts",
+    "backup": "tsx scripts/backup-db.ts",
+    "restore": "tsx scripts/restore-db.ts"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.1",
