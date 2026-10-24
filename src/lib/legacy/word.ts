@@ -74,6 +74,19 @@ function afterAddress(line: string) {
   return m && /\d/.test(m[2]) ? m[2] : "";
 }
 
+const COUNTY_RE = /(?:[台臺]北|新北|基隆|桃園|新竹|苗栗|[台臺]中|彰化|南投|雲林|嘉義|[台臺]南|高雄|屏東|宜蘭|花蓮|[台臺]東|澎湖|金門|連江)[縣市]/;
+
+/** 地址前面寫的規格：「10x3盒寄高雄市…」→「10x3盒寄」 */
+function beforeAddress(line: string) {
+  const l = line.replace(LABEL_RE, "");
+  const i = l.search(COUNTY_RE);
+  const head = i > 0 ? l.slice(0, i) : "";
+  return /盒|寄|送|[粒顆]|[xX×*]/.test(head) ? head : "";
+}
+
+/** 地址行裡可能寫著規格的部分 */
+const itemTextOf = (line: string) => (isAddress(line) ? `${beforeAddress(line)} ${afterAddress(line)}` : line);
+
 function isAddress(line: string) {
   const l = line.replace(LABEL_RE, "");
   return ADDRESS_RE.test(l) && l.length >= 6 && phonesIn(l).length === 0;
@@ -82,7 +95,9 @@ function isAddress(line: string) {
 function splitAddress(line: string) {
   const l = line.replace(LABEL_RE, "").replace(/^\d\.\s*/, "");
   const zip = /^(\d{3,6})\s*/.exec(l)?.[1] ?? "";
-  const rest = l.slice(zip.length).trim();
+  let rest = l.slice(zip.length).trim();
+  const head = beforeAddress(rest);
+  if (head) rest = rest.slice(head.length).trim();
   const cut = rest.search(/[（(]/);
   return { zip, address: (cut > 0 ? rest.slice(0, cut) : rest).trim(), extra: cut > 0 ? rest.slice(cut) : "" };
 }
@@ -108,6 +123,9 @@ function nameOf(line: string): { name: string; buyer?: Buyer } | null {
     .replace(/(先生|小姐)?收$/, "$1")
     .replace(/[”"、，,:：\s]+$/g, "")
     .trim();
+  // 「黃春心先生，手機0910016450」拿掉電話後剩下的「，手機」；只寫「電話」的行照舊（用來分收件人）
+  const noLabel = text.replace(/[，,、\s]*(?:手機|電話|市話|tel)\s*[:：]?\s*$/i, "").trim();
+  if (noLabel) text = noLabel;
   if (!text || !/[一-鿿A-Za-z]/.test(text)) return null;
   return { name: text, buyer: inParen?.buyer };
 }
@@ -327,7 +345,7 @@ export async function parseWordOrders(buffer: Buffer, fileName: string, priceOf?
           })
           .join("\n"),
       );
-      const items = seg.flatMap((l) => itemsIn(isAddress(l) ? afterAddress(l) : l, defaultProduct));
+      const items = seg.flatMap((l) => itemsIn(itemTextOf(l), defaultProduct));
       return {
         id: `s${k + 1}`,
         recipient: {
@@ -348,7 +366,7 @@ export async function parseWordOrders(buffer: Buffer, fileName: string, priceOf?
     });
 
     // 訂單品項：各收件人的品項合併（同品項同規格加總）
-    const parsed = segments.flatMap((seg) => seg.flatMap((l) => itemsIn(isAddress(l) ? afterAddress(l) : l, defaultProduct)));
+    const parsed = segments.flatMap((seg) => seg.flatMap((l) => itemsIn(itemTextOf(l), defaultProduct)));
     const merged = new Map<string, ParsedItem>();
     for (const it of parsed) {
       const k = `${it.product}|${it.spec}`;
@@ -397,7 +415,20 @@ export async function parseWordOrders(buffer: Buffer, fileName: string, priceOf?
       buyer = { name: parenBuyer.name, phones: [...parenBuyer.phones, ...lineBuyer.phones] };
     // 只寫了「訂購人：王小明」：收件人就是訂購者本人
     if (buyer && !first.name) first.name = buyer.name;
-    const self = !buyer || buyer.name === first.name;
+    // 訂購者自己也是其中一位收件人（「黃春心先生，手機0910016450」）：用那位收件人的電話
+    // 去掉稱謂再比；「高小姐」「高先生」只剩一個字，不算同一人
+    const bare = (n: string) => {
+      const s = n.replace(/\s+/g, "");
+      const t = s.replace(/(先生|小姐|太太|女士)$/, "");
+      return t.length >= 2 ? t : s;
+    };
+    const asRecipient = buyer && shipments.find((s) => bare(s.recipient.name) === bare(buyer!.name));
+    if (buyer && asRecipient && !buyer.phones.length)
+      buyer = {
+        name: buyer.name,
+        phones: [asRecipient.recipient.phone, asRecipient.recipient.phone2].map((p) => toPhone(p)).filter((p): p is Phone => !!p),
+      };
+    const self = !buyer || bare(buyer.name) === bare(first.name);
     if (!self) reasons.push(`提示：訂購者 ${buyer!.name}${buyer!.phones.length ? "" : "（沒有電話）"}，收件人 ${first.name || "？"}`);
     if (!first.name) reasons.push("沒有姓名");
 
