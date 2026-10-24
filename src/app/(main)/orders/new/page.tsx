@@ -14,7 +14,7 @@ function NewOrder() {
   const { data: customer, loading } = useFetch(`new-order:${customerId}`, () =>
     customerId ? customersApi.get(customerId) : Promise.resolve(null),
   );
-  const [initial] = useState(() => emptyOrder(uid("o"), nowStr()));
+  const [initial, setInitial] = useState(() => emptyOrder(uid("o"), nowStr()));
   const [saving, setSaving] = useState(false);
 
   if (loading) return <Spinner />;
@@ -43,6 +43,7 @@ function NewOrder() {
 
   return (
     <OrderForm
+      key={initial.id}
       initial={start}
       customer={customer ?? null}
       saving={saving}
@@ -52,9 +53,12 @@ function NewOrder() {
         setSaving(true);
         try {
           const saved = await ordersApi.save(o);
+          // 離開的頁面會被保留：換一張新的空白單，回來時才不會改到剛建立的訂單
+          setInitial(emptyOrder(uid("o"), nowStr()));
           router.push(`/orders/${saved.id}`);
         } catch (e) {
           alertError("儲存失敗", e);
+        } finally {
           setSaving(false);
         }
       }}

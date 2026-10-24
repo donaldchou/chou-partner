@@ -35,6 +35,8 @@ export default function OrderDetailPage() {
       }
     } catch (e) {
       alertError("儲存失敗", e);
+    } finally {
+      // 離開的頁面會被保留，回來時按鈕不能還停在「儲存中」
       setSaving(false);
     }
   }
