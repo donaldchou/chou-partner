@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useState, useSyncExternalStore } from "react";
 import {
   AlertTriangle,
@@ -118,12 +118,25 @@ function useCollapsed(): [boolean, (v: boolean) => void] {
   return [collapsed, writeCollapsed];
 }
 
-/** 選單中最符合目前網址的項目（例如 /customers/c1 → 客戶查詢，/customers/new → 客戶建檔） */
-function activeHref(pathname: string) {
-  const matches = [...NAV, ADMIN_NAV]
-    .flatMap((g) => g.items.map((it) => it.href))
-    .filter((href) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/")));
-  return matches.sort((a, b) => b.length - a.length)[0];
+/**
+ * 選單中最符合目前網址的項目（例如 /customers/c1 → 客戶查詢，/customers/new → 客戶建檔）。
+ * 帶參數的項目（/customers?status=suspect → 疑似無效客戶）要路徑相同、參數都符合，而且比同路徑沒帶參數的優先
+ */
+function activeHref(pathname: string, search: URLSearchParams) {
+  const score = (href: string) => {
+    const [path, query] = href.split("?");
+    if (query) {
+      const want = new URLSearchParams(query);
+      return pathname === path && [...want].every(([k, v]) => search.get(k) === v) ? 1000 + path.length : -1;
+    }
+    if (path === "/") return pathname === "/" ? 1 : -1;
+    return pathname === path || pathname.startsWith(path + "/") ? path.length : -1;
+  };
+  const best = [...NAV, ADMIN_NAV]
+    .flatMap((g) => g.items.map((it) => ({ href: it.href, s: score(it.href) })))
+    .filter((x) => x.s >= 0)
+    .sort((a, b) => b.s - a.s)[0];
+  return best?.href;
 }
 
 /* ---------------- 選單分組的展開／收合，記在這台電腦的瀏覽器 ---------------- */
@@ -176,8 +189,18 @@ function useClosedGroups() {
   return { closed, toggle, toggleAll };
 }
 
-function NavItems({ pathname, mini, onNavigate }: { pathname: string; mini: boolean; onNavigate: () => void }) {
-  const current = activeHref(pathname);
+function NavItems({
+  pathname,
+  search = new URLSearchParams(),
+  mini,
+  onNavigate,
+}: {
+  pathname: string;
+  search?: URLSearchParams;
+  mini: boolean;
+  onNavigate: () => void;
+}) {
+  const current = activeHref(pathname, search);
   const isAdmin = useMe()?.role === "admin";
   const { closed, toggle } = useClosedGroups();
   return navFor(isAdmin).map((g) => {
@@ -233,9 +256,10 @@ function NavItems({ pathname, mini, onNavigate }: { pathname: string; mini: bool
   });
 }
 
-// usePathname 在 Cache Components 下需要 Suspense，預渲染時先顯示無選取狀態的選單
+// usePathname / useSearchParams 在 Cache Components 下需要 Suspense，預渲染時先顯示無選取狀態的選單
 function ActiveNavItems(props: { mini: boolean; onNavigate: () => void }) {
-  return <NavItems pathname={usePathname()} {...props} />;
+  const search = useSearchParams();
+  return <NavItems pathname={usePathname()} search={new URLSearchParams(search.toString())} {...props} />;
 }
 
 /** 選單最上面的圖示：寬選單＝全部分組展開／收合；只剩圖示的窄選單＝展開選單 */
