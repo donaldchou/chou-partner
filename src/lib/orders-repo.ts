@@ -5,8 +5,9 @@ import { assertNoInlineFiles, collectFileUrls, deleteFiles, deleteRemovedFiles }
 import { suspectFilter } from "./customer-quality";
 import { recomputeStats } from "./customer-stats";
 import { connectDB } from "./mongodb";
+import { digitsOf, toPhone } from "./legacy/normalize";
 import { escapeRegex } from "./repo";
-import type { Customer, Order, OrderChannel } from "./types";
+import type { Customer, Order, OrderChannel, Phone } from "./types";
 import { uid } from "./utils";
 
 type Data = Record<string, unknown>;
@@ -98,6 +99,20 @@ async function nextOrderNo(channel: OrderChannel, season: number) {
   return `${prefix}${String(n).padStart(4, "0")}`;
 }
 
+/** 訂購人的有效電話若客戶資料裡還沒有，就補進去（收件人可能是送禮對象，不補） */
+async function syncBuyerPhones(customerId: string, buyer: unknown) {
+  const b = (buyer ?? {}) as Partial<Order["buyer"]>;
+  // digits 跟客戶表單一樣含分機，比對才不會把同一支電話重複加入
+  const phones = [toPhone(b.phone), toPhone(b.phone2)]
+    .filter((p): p is Phone => !!p)
+    .map((p) => ({ ...p, digits: digitsOf(p.number) }));
+  const c = (await CustomerModel.findById(customerId).select("phones").lean()) as unknown as Pick<Customer, "phones"> | null;
+  if (!c) return;
+  const has = new Set(c.phones.map((x) => digitsOf(x.number)));
+  const add = phones.filter((p, i) => !has.has(p.digits) && phones.findIndex((x) => x.digits === p.digits) === i);
+  if (add.length) await CustomerModel.updateOne({ _id: customerId }, { $push: { phones: { $each: add } } });
+}
+
 /** PUT /api/orders/<id>：整筆儲存（不存在時建立）；之後重算相關客戶的統計 */
 export async function saveOrder(id: string, body: Data) {
   await connectDB();
@@ -110,6 +125,7 @@ export async function saveOrder(id: string, body: Data) {
   if (!doc) {
     if (!data.orderNo) data.orderNo = await nextOrderNo(data.channel as OrderChannel, Number(data.season));
     const created = await OrderModel.create({ ...data, _id: id });
+    await syncBuyerPhones(String(data.customerId), data.buyer);
     await recomputeStats([String(data.customerId)]);
     return { doc: toClient(created.toObject()), created: true };
   }
@@ -125,6 +141,7 @@ export async function saveOrder(id: string, body: Data) {
     };
   doc.overwrite({ ...data, _id: id });
   await doc.save();
+  await syncBuyerPhones(String(data.customerId), data.buyer);
   await recomputeStats([before.customerId, String(data.customerId)]);
   await deleteRemovedFiles(before, data);
   return { doc: toClient(doc.toObject()), created: false };
