@@ -45,3 +45,4 @@ next-env.d.ts
 
 # 真實客戶訂購資料（含個資，不上傳）
 /db_test_file/
+/chou-partner-backup/

@@ -1,7 +1,7 @@
 /**
- * 把整個資料庫（MONGODB_URI 指定的那個）備份成一個壓縮檔。備份裡是客戶個資，預設存在專案外面，不會進 git。
+ * 把整個資料庫（MONGODB_URI 指定的那個）備份成一個壓縮檔。備份裡是客戶個資，存放的資料夾已列在 .gitignore，不會進 git。
  *
- *   npm run backup                    → C:\backup\Personal\AI\chou-partner-backup\chou-partner_YYYYMMDD_HHmm.jsonl.gz
+ *   npm run backup                    → <專案>\chou-partner-backup\chou-partner_YYYYMMDD_HHmm.jsonl.gz
  *   npm run backup -- --out D:\備份   → 改存到別的資料夾（也可設環境變數 BACKUP_DIR）
  *
  * 檔案格式（gzip 壓縮的 JSON Lines，Canonical EJSON，ObjectId／Date 型別原樣保留）：
@@ -22,7 +22,7 @@ for (const line of readFileSync(".env.local", "utf8").replace(/^﻿/, "").split(
   if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim().replace(/^"|"$/g, "");
 }
 
-const DEFAULT_DIR = "C:\\backup\\Personal\\AI\\chou-partner-backup";
+const DEFAULT_DIR = join(process.cwd(), "chou-partner-backup");
 const { EJSON } = mongoose.mongo.BSON;
 
 function argValue(name: string) {
