@@ -8,7 +8,7 @@ import { CustomerStatusBanner, InvalidBadge } from "@/components/CustomerStatus"
 import { Badge, Card, Empty, Input, LinkButton, PageHeader, Pagination, Select, Spinner, Tabs, useDebounced } from "@/components/ui";
 import { itemsText } from "@/lib/calc";
 import { CUSTOMER_SOURCES } from "@/lib/enums";
-import { customersApi, type OrderBrief } from "@/lib/store";
+import { customersApi, useAppState, type OrderBrief } from "@/lib/store";
 import type { Customer } from "@/lib/types";
 import { useFetch } from "@/lib/use-fetch";
 import { cn, formatDate, money } from "@/lib/utils";
@@ -45,12 +45,24 @@ export default function CustomersPage() {
   const sp = useSearchParams();
   const raw = sp.get("status");
   const status: Status = raw === "suspect" || raw === "invalid" ? raw : "";
+  // 標籤篩選放在網址上（從「標籤管理」點人數會帶 ?tag=）
+  const tag = sp.get("tag") ?? "";
+  const { customerTags } = useAppState();
+  const go = (next: { status?: Status; tag?: string }) => {
+    const p = new URLSearchParams();
+    const s = next.status ?? status;
+    const t = next.tag ?? tag;
+    if (s) p.set("status", s);
+    if (t) p.set("tag", t);
+    setPage(1);
+    router.replace(p.size ? `/customers?${p}` : "/customers");
+  };
   const [kw, setKw] = useState("");
   const [sort, setSort] = useState("recent");
   const [source, setSource] = useState("");
   const [page, setPage] = useState(1);
   const q = useDebounced(kw.trim());
-  const params = { q, sort, source, status, page, limit: 20, withOrders: 1, withCounts: 1 };
+  const params = { q, sort, source, tag, status, page, limit: 20, withOrders: 1, withCounts: 1 };
   const { data, loading, error, reload } = useFetch(JSON.stringify(params), () => customersApi.list(params));
   const text = STATUS_TEXT[status];
   const counts = data?.counts;
@@ -79,10 +91,7 @@ export default function CustomersPage() {
 
       <Tabs<Status>
         value={status}
-        onChange={(v) => {
-          setPage(1);
-          router.replace(v ? `/customers?status=${v}` : "/customers");
-        }}
+        onChange={(v) => go({ status: v })}
         tabs={[
           { value: "", label: "有效客戶", count: counts?.valid },
           { value: "suspect", label: "疑似無效（待確認）", count: counts?.suspect },
@@ -106,6 +115,14 @@ export default function CustomersPage() {
           {CUSTOMER_SOURCES.map((s) => (
             <option key={s}>{s}</option>
           ))}
+        </Select>
+        <Select className="w-auto" value={tag} onChange={(e) => go({ tag: e.target.value })}>
+          <option value="">全部標籤</option>
+          {["回購客", ...customerTags.map((t) => t.name), ...(tag && tag !== "回購客" && !customerTags.some((t) => t.name === tag) ? [tag] : [])].map(
+            (t) => (
+              <option key={t}>{t}</option>
+            ),
+          )}
         </Select>
         <Select className="w-auto" value={sort} onChange={(e) => reset(setSort)(e.target.value)}>
           {SORTS.map((s) => (
@@ -160,7 +177,12 @@ function CustomerResult({ c, onStatusChange }: { c: Customer & { orders?: OrderB
             </Link>
             <InvalidBadge c={c} />
             {c.title && <span className="text-sm text-slate-500">{c.title}</span>}
-            {c.tags.includes("回購客") && <Badge color="green">回購客</Badge>}
+            {/* 回購客（系統自動）綠色，其他標籤（回頭客、買多…）紫色，和客戶詳細頁一致 */}
+            {[...c.tags].sort((a, b) => Number(b === "回購客") - Number(a === "回購客")).map((t) => (
+              <Badge key={t} color={t === "回購客" ? "green" : "purple"}>
+                {t}
+              </Badge>
+            ))}
             {c.sources.map((s) => (
               <Badge key={s} color="gray">
                 {s}

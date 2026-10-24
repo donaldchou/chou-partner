@@ -1,3 +1,5 @@
+import { CustomerModel } from "@/models/customer";
+import { CustomerTagModel } from "@/models/customer-tag";
 import { AgencyModel, BookingModel } from "@/models/tour";
 import { HttpError, fromClient, toClient } from "./api";
 import { COLLECTIONS, DATE_FIELD, FILTERS, SEARCH_FIELDS, SORT, type CollectionName } from "./collections";
@@ -93,13 +95,32 @@ async function syncBookingPeople(agencyId: string, data: Data) {
   await BookingModel.updateMany({ agencyId, driverId: { $nin: ["", ...ids("司機")] } }, { $set: { driverId: "" } });
 }
 
-async function beforeWrite(name: CollectionName, data: Data) {
-  assertNoInlineFiles(data);
-  if (name === "bookings") await checkBooking(data);
+/** 標籤選項：名稱不可重複；「回購客」由系統依訂單自動標記，不能手動管理 */
+async function checkCustomerTag(id: string, data: Data) {
+  const tagName = String(data.name ?? "").trim();
+  if (tagName === "回購客") throw new HttpError(400, "「回購客」會依訂單自動標記，不需要新增");
+  if (await CustomerTagModel.exists({ _id: { $ne: id }, name: tagName })) throw new HttpError(409, `已經有「${tagName}」這個標籤`);
+  data.name = tagName;
 }
 
-async function afterWrite(name: CollectionName, id: string, data: Data) {
+/** 標籤改名：已經貼了舊名稱的客戶一起改成新名稱 */
+async function renameCustomerTag(before: Data | null, data: Data) {
+  const from = String(before?.name ?? "");
+  const to = String(data.name ?? "");
+  if (!from || from === to) return;
+  await CustomerModel.updateMany({ tags: from }, { $addToSet: { tags: to } });
+  await CustomerModel.updateMany({ tags: from }, { $pull: { tags: from } });
+}
+
+async function beforeWrite(name: CollectionName, id: string, data: Data) {
+  assertNoInlineFiles(data);
+  if (name === "bookings") await checkBooking(data);
+  if (name === "customerTags") await checkCustomerTag(id, data);
+}
+
+async function afterWrite(name: CollectionName, id: string, data: Data, before: Data | null = null) {
   if (name === "agencies") await syncBookingPeople(id, data);
+  if (name === "customerTags") await renameCustomerTag(before, data);
 }
 
 /** POST /api/<collection>：新增（沒帶 id 時自動產生） */
@@ -109,7 +130,7 @@ export async function createDoc(name: CollectionName, body: Data) {
   const id = typeof body.id === "string" && body.id ? body.id : uid(name.slice(0, 1));
   if (await Model.exists({ _id: id })) throw new HttpError(409, "這個 id 已經存在");
   const data = fromClient(body);
-  await beforeWrite(name, data);
+  await beforeWrite(name, id, data);
   const doc = await Model.create({ ...data, _id: id });
   return toClient(doc.toObject());
 }
@@ -119,7 +140,7 @@ export async function saveDoc(name: CollectionName, id: string, body: Data) {
   await connectDB();
   const Model = COLLECTIONS[name];
   const data = fromClient(body);
-  await beforeWrite(name, data);
+  await beforeWrite(name, id, data);
 
   const doc = await Model.findById(id);
   if (!doc) {
@@ -128,10 +149,10 @@ export async function saveDoc(name: CollectionName, id: string, body: Data) {
     return { doc: toClient(created.toObject()), created: true };
   }
 
-  const before = doc.toObject();
+  const before = doc.toObject() as Data;
   doc.overwrite({ ...data, _id: id });
   await doc.save();
-  await afterWrite(name, id, data);
+  await afterWrite(name, id, data, before);
   await deleteRemovedFiles(before, data);
   return { doc: toClient(doc.toObject()), created: false };
 }

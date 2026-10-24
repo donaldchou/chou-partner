@@ -25,6 +25,7 @@ import {
   CalendarClock,
   UserPlus,
   UserX,
+  Tags,
   X,
 } from "lucide-react";
 import { logout, reload, useDBStatus, useMe } from "@/lib/store";
@@ -41,6 +42,7 @@ const NAV = [
       { href: "/customers/new", label: "客戶建檔", icon: UserPlus, admin: true },
       { href: "/customers/import", label: "歷史紀錄匯入", icon: FileUp, admin: true },
       { href: "/customers?status=suspect", label: "疑似無效客戶", icon: UserX, admin: true },
+      { href: "/customers/tags", label: "標籤管理", icon: Tags, admin: true },
     ],
   },
   {

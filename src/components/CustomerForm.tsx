@@ -1,8 +1,10 @@
 "use client";
 
 import { Plus, X } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { CUSTOMER_SOURCES } from "@/lib/enums";
+import { useAppState } from "@/lib/store";
 import type { Customer, CustomerSource, Phone } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import BusinessCardCapture from "./BusinessCardCapture";
@@ -47,8 +49,13 @@ export default function CustomerForm({
     phones: initial.phones.length ? initial.phones : [{ number: "", digits: "", type: "手機" as const }],
     addresses: initial.addresses.length ? initial.addresses : [{ zip: "", address: "" }],
   }));
+  const { customerTags } = useAppState();
   const [tagText, setTagText] = useState(initial.tags.join("、"));
   const set = <K extends keyof Customer>(k: K, v: Customer[K]) => setC((p) => ({ ...p, [k]: v }));
+  const tagList = tagText.split(/[、,，\s]+/).filter(Boolean);
+  // 快速按鈕和文字框是同一份標籤：按一下加入或移除
+  const toggleTag = (t: string) =>
+    setTagText((tagList.includes(t) ? tagList.filter((x) => x !== t) : [...tagList, t]).join("、"));
 
   function submit() {
     const phones = c.phones.filter((p) => digits(p.number)).map((p) => ({ ...p, digits: digits(p.number) }));
@@ -59,7 +66,7 @@ export default function CustomerForm({
       phones,
       emails: c.emails.map((e) => e.trim()).filter(Boolean),
       addresses: c.addresses.filter((a) => a.address.trim()),
-      tags: tagText.split(/[、,，\s]+/).filter(Boolean),
+      tags: [...new Set(tagList)],
     });
   }
 
@@ -248,9 +255,38 @@ export default function CustomerForm({
               })}
             </div>
             <div className="grid gap-4">
-              <Field label="標籤" hint="用頓號或空白分隔，例如：企業客戶、甜柿客。「回購客」會依訂單自動標記">
-                <Input value={tagText} onChange={(e) => setTagText(e.target.value)} />
-              </Field>
+              {/* 不用 <Field>：它是 <label>，點標題會觸發裡面的第一個按鈕 */}
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-700">標籤</span>
+                  <Link href="/customers/tags" target="_blank" className="text-xs text-brand-700 hover:underline">
+                    管理標籤
+                  </Link>
+                </div>
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {customerTags.map(({ name: t }) => {
+                    const on = tagList.includes(t);
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => toggleTag(t)}
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-sm",
+                          on ? "border-accent-500 bg-accent-500 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-accent-400",
+                        )}
+                      >
+                        {t}
+                      </button>
+                    );
+                  })}
+                </div>
+                <Input aria-label="標籤" value={tagText} onChange={(e) => setTagText(e.target.value)} />
+                <span className="mt-1 block text-xs text-slate-400">
+                  點選上方按鈕（可複選），或用頓號、空白分隔自行輸入，例如：企業客戶、甜柿客。「回購客」會依訂單自動標記
+                </span>
+              </div>
               <Field label="備註">
                 <Textarea
                   value={c.note ?? ""}

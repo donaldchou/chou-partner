@@ -1,7 +1,6 @@
 // 前端型別與 Mongoose schema 共用的選項清單
 /** 客戶從哪些通路來過（可多個） */
-export const CUSTOMER_SOURCES = ["網站", "電話", "LINE", "現場", "名片", "團購", "旅行社"] as const;
-export const GENDERS = ["", "F", "M"] as const;
+export const CUSTOMER_SOURCES = ["網站", "電話", "LINE", "現場", "名片", "團購", "旅行社"] as const;export const GENDERS = ["", "F", "M"] as const;
 export const PHONE_TYPES = ["手機", "市話"] as const;
 /** 標記無效客戶的原因 */
 export const INVALID_REASONS = ["測試資料", "垃圾資料", "重複客戶", "聯絡不到", "其他"] as const;

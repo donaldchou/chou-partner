@@ -1,4 +1,5 @@
 import type { Model } from "mongoose";
+import { CustomerTagModel } from "@/models/customer-tag";
 import { GroupBuyModel } from "@/models/group-buy";
 import { ProductModel } from "@/models/product";
 import { AgencyModel, BookingModel } from "@/models/tour";
@@ -15,6 +16,7 @@ export const COLLECTIONS: Record<CollectionName, Model<unknown>> = {
   agencies: AgencyModel,
   bookings: BookingModel,
   groupBuys: GroupBuyModel,
+  customerTags: CustomerTagModel,
 };
 
 export const isCollection = (name: string): name is CollectionName => name in COLLECTIONS;
@@ -25,6 +27,7 @@ export const SORT: Record<CollectionName, Record<string, 1 | -1>> = {
   agencies: { name: 1 },
   bookings: { datetime: 1 },
   groupBuys: { startDate: -1 },
+  customerTags: { order: 1, name: 1 },
 };
 
 /** GET /api/<collection>?欄位=值 可直接篩選的欄位 */

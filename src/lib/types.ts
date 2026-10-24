@@ -282,9 +282,17 @@ export interface GroupBuy {
 }
 
 /** 前端一次載入的資料（客戶與訂單量大，改用分頁 API） */
+/** 客戶標籤選項：編輯客戶時的快速按鈕（客戶身上的 tags 仍是字串，也可以自由輸入其他標籤） */
+export interface CustomerTag {
+  id: string;
+  name: string;
+  order: number;
+}
+
 export interface AppState {
   products: Product[];
   agencies: Agency[];
   bookings: Booking[];
   groupBuys: GroupBuy[];
+  customerTags: CustomerTag[];
 }

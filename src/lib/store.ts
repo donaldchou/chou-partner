@@ -1,10 +1,10 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import type { Agency, AppState, Booking, Customer, GroupBuy, Order, Product } from "./types";
+import type { Agency, AppState, Booking, Customer, CustomerTag, GroupBuy, Order, Product } from "./types";
 
 // 前端資料快取：啟動時從 /api/db 載入，寫入時先更新畫面（樂觀更新）再送到後端。
-const EMPTY: AppState = { products: [], agencies: [], bookings: [], groupBuys: [] };
+const EMPTY: AppState = { products: [], agencies: [], bookings: [], groupBuys: [], customerTags: [] };
 
 export type DBStatus = "idle" | "loading" | "ready" | "error";
 
@@ -142,6 +142,14 @@ export const actions = {
 
   saveGroupBuy: (g: GroupBuy) => quiet(save("groupBuys", g)),
   deleteGroupBuy: (id: string) => quiet(remove("groupBuys", id)),
+
+  // 標籤選項依 order 排序，存完讓列表照新順序重排
+  saveCustomerTag: (t: CustomerTag) => {
+    const ok = quiet(save("customerTags", t));
+    setLocal({ ...state, customerTags: [...state.customerTags].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)) });
+    return ok;
+  },
+  deleteCustomerTag: (id: string) => quiet(remove("customerTags", id)),
 };
 
 /* ---------------- 客戶與訂單：資料量大，用分頁 API，不放進全域快取 ---------------- */
