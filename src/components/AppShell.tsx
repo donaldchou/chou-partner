@@ -216,14 +216,14 @@ function NavItems({ pathname, mini, onNavigate }: { pathname: string; mini: bool
                 title={mini ? it.label : undefined}
                 aria-label={mini ? it.label : undefined}
                 className={cn(
-                  "mb-0.5 flex items-center gap-3 rounded-xl py-2.5 text-[1.05rem] transition-colors",
+                  "mb-0.5 flex items-center gap-3 rounded-xl py-2.5 text-base transition-colors",
                   mini ? "justify-center px-0" : "px-3",
                   active
-                    ? "bg-brand-500 font-semibold text-white shadow-sm shadow-black/20"
+                    ? "bg-brand-500 font-medium text-white shadow-sm shadow-black/20"
                     : "text-brand-50/85 hover:bg-white/10 hover:text-white",
                 )}
               >
-                <it.icon size={21} className="shrink-0" />
+                <it.icon size={20} className="shrink-0" />
                 {!mini && <span className="truncate">{it.label}</span>}
               </Link>
             );
@@ -393,14 +393,14 @@ function UserBlock({ mini }: { mini: boolean }) {
   return (
     <div className="mb-1 space-y-1">
       <div
-        className={cn("flex items-center gap-2.5 py-1 text-brand-50", mini ? "justify-center" : "px-3")}
+        className={cn("flex items-center gap-2.5 py-1 text-base text-brand-50", mini ? "justify-center" : "px-3")}
         title={me ? `${me.email}（${role}）` : undefined}
       >
-        <UserRound size={19} className="shrink-0 text-brand-200/70" />
+        <UserRound size={18} className="shrink-0 text-brand-200/70" />
         {!mini && (
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium">{me?.name || me?.email || "…"}</div>
-            <div className="text-xs text-brand-200/60">{role}</div>
+            <div className="truncate">{me?.name || me?.email || "…"}</div>
+            <div className="text-sm text-brand-200/60">{role}</div>
           </div>
         )}
       </div>
@@ -409,11 +409,11 @@ function UserBlock({ mini }: { mini: boolean }) {
         title={mini ? "登出" : undefined}
         aria-label="登出"
         className={cn(
-          "flex w-full items-center gap-2.5 rounded-xl py-1.5 text-sm text-brand-100/80 hover:bg-white/10 hover:text-white",
+          "flex w-full items-center gap-3 rounded-xl py-2 text-base text-brand-100/80 hover:bg-white/10 hover:text-white",
           mini ? "justify-center" : "px-3",
         )}
       >
-        <LogOut size={17} className="shrink-0" />
+        <LogOut size={18} className="shrink-0" />
         {!mini && "登出"}
       </button>
     </div>
