@@ -1,7 +1,7 @@
 import MDBReader from "mdb-reader";
 import { HttpError } from "../api";
 import type { Brand, OrderItem, OrderStatus, Package, PaymentMethod, PaymentStatus, Product } from "../types";
-import { decodeEntities, digitsOf, localDateTime, pad, seasonOf, toPhone } from "./normalize";
+import { decodeEntities, digitsOf, localDateTime, pad, seasonOf, toPhone, withAreaCode } from "./normalize";
 import type { ImportOrder, ParseResult } from "./types";
 
 type Row = Record<string, unknown>;
@@ -136,12 +136,22 @@ export function parseMdb(buffer: Buffer, fileName: string): ParseResult {
     else if (method === "貨到付款") payStatusValue = status === "已出貨" ? "貨到收款" : "未付款";
     else if (method === "ATM轉帳") payStatusValue = status === "已出貨" ? "已付款" : "待匯款";
 
-    const phones = [toPhone(o.phone), toPhone(o.phone2)].filter(
-      (p, i, a) => p && a.findIndex((x) => x?.digits === p.digits) === i,
-    ) as NonNullable<ReturnType<typeof toPhone>>[];
     const name = decodeEntities(o.username);
     const zip = digitsOf(o.zip).slice(0, 6);
     const address = decodeEntities(o.addr);
+    // 市話漏打區碼時依地址補上，並標記待確認
+    const areaFixed: string[] = [];
+    const phoneOf = (raw: unknown) => {
+      const p = toPhone(raw);
+      if (p) return p;
+      const guess = toPhone(withAreaCode(raw, address, zip));
+      if (guess) areaFixed.push(`電話補區碼：${String(raw).trim()} → ${guess.number}`);
+      return guess;
+    };
+    const phones = [phoneOf(o.phone), phoneOf(o.phone2)].filter(
+      (p, i, a) => p && a.findIndex((x) => x?.digits === p.digits) === i,
+    ) as NonNullable<ReturnType<typeof toPhone>>[];
+    const reviewReasons = [...(items.some((i) => i.qty > 100) ? ["數量異常（超過 100 盒）"] : []), ...areaFixed];
     const processedAt = localDateTime(o.processtime);
 
     const packages: Package[] = (sudaByOrder.get(orderid) ?? []).map((s) => ({
@@ -218,9 +228,9 @@ export function parseMdb(buffer: Buffer, fileName: string): ParseResult {
         file: fileName,
         key: `mdb:${brand}:${orderid}:${orderedAt}`,
         parsedBy: "rule",
-        // 網站資料是結構化的，只有數量明顯異常（例如 1111 盒）才需要確認
-        needsReview: items.some((i) => i.qty > 100),
-        reviewReasons: items.some((i) => i.qty > 100) ? ["數量異常（超過 100 盒）"] : [],
+        // 網站資料是結構化的，只有數量明顯異常（例如 1111 盒）或電話補過區碼才需要確認
+        needsReview: reviewReasons.length > 0,
+        reviewReasons,
       },
       customerHint: {
         name,

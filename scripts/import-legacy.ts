@@ -4,6 +4,7 @@
  *   npm run import:legacy -- --dry-run          只解析、顯示統計，不寫入
  *   npm run import:legacy                       寫入 MongoDB（重複執行不會產生重複訂單）
  *   npm run import:legacy -- --dir 其他資料夾    預設 db_test_file（底下要有 mdb/、word/）
+ *   npm run import:legacy -- --skip-word        只匯入 MDB，不處理 Word
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -17,6 +18,7 @@ for (const line of readFileSync(".env.local", "utf8").replace(/^﻿/, "").split(
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
+const skipWord = args.includes("--skip-word");
 const dir = args.includes("--dir") ? args[args.indexOf("--dir") + 1] : "db_test_file";
 
 async function main() {
@@ -54,6 +56,12 @@ async function main() {
     console.log(
       `  ✔ 新增訂單 ${s.orders.created}（已存在 ${s.orders.existing}），新增客戶 ${s.customers.created}，更新客戶 ${s.customers.updated}`,
     );
+  }
+
+  if (skipWord) {
+    console.log(dryRun ? "\n（--dry-run：沒有寫入資料庫）" : "\n（--skip-word：沒有處理 Word）");
+    await mongoose.disconnect();
+    return;
   }
 
   // ---------- Word ----------

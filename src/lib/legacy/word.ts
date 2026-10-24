@@ -17,10 +17,55 @@ const LABEL_RE =
 const ADDRESS_RE = /([一-鿿]{1,3}[縣市]).*(路|街|巷|弄|號|村|里|段|鄰)/;
 const NOT_NAME =
   /寄|盒|粒|顆|裝|付款|匯款|收款|轉帳|運費|現場|宅配|^line|待|已|一共|費用|\d\s*元|送達|出貨|\d\s*[包箱斤]|[*×=]|\d\s*[xX]\s*\d|更正|改送|以上|備註|合計|總計|共計|水蜜桃|甜柿|柿餅|蜜蘋果|李子|蜜李|果乾|果醬|高麗菜|^(紅|黃|白)色?$|^小翠單$|單$/i;
-const REFERRER_RE = /[(（]\s*([^()（）]{1,10}?)\s*(?:指送|寄|贈|送|代訂)\s*[)）]|^(.{1,10}?)(?:指送|代訂)/;
+/** 「谷英歌 (蔡旭昌訂)」「許安豪 (林永銘寄)」「蘇德智 (寄件人吳晟宇)」：括號裡是訂購者，可能接著電話 */
+const BUYER_PAREN_RE =
+  /[(（]\s*(?:寄件人\s*[:：]?\s*([^()（）\d]{1,12}?)|([^()（）\d]{1,12}?)\s*(?:指送|代訂|寄|訂|送|贈))\s*([^()（）]*)[)）]/;
+/** 訂購者自成一行：「陳宥蓁寄（…）0918763260」「寄件人:周進達(TEL:…)」「（訂購人：潘森榮 電話：…）」「曾國展指送」 */
+const BUYER_LINE_RES = [
+  /^[(（]?\s*(?:訂購人|寄件人)\s*[:：]?\s*([^\s:：,，(（)）\d]{1,20})(.*)$/,
+  /^([^\s\d:：,，(（]{1,8}?)(?:指送|代訂)(.*)$/,
+  /^([^\s\d:：,，(（]{1,8}?)(?:寄|訂)(?![出送件單購])(.*\d{7,}.*)$/,
+  // 段落開頭只寫「電話蔡旭昌訂」「林永銘寄」
+  /^(?:電話|LINE|line)?\s*([^\s\d:：,，(（]{2,8}?)(?:寄|訂)()$/,
+];
+const NOT_BUYER = /補|再|已|請|麻煩|改|待|毀損|星期|電話|姓名|收件|地址|現場|今天|明天|一起|先|幫/;
+
+interface Buyer {
+  name: string;
+  phones: Phone[];
+}
 
 function phonesIn(line: string): Phone[] {
   return [...line.matchAll(PHONE_RE)].map((m) => toPhone(m[0])).filter((p): p is Phone => !!p);
+}
+
+function buyerOf(name: string | undefined, rest: string): Buyer | null {
+  // 「寄件人：黃寶春寄」「寄件人著名（註明）吳晟宇」
+  const n = (name ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^(?:請?註明|著名)/, "")
+    .replace(/(?:寄|訂|收)$/, "")
+    .trim();
+  if (!n || NOT_BUYER.test(n) || !/[一-鿿A-Za-z]/.test(n)) return null;
+  return { name: n, phones: phonesIn(rest) };
+}
+
+/** 括號裡的訂購者（後面只能接電話，「毀損補寄2盒」這類不算） */
+function buyerInParen(line: string): { buyer: Buyer; match: string } | null {
+  const m = BUYER_PAREN_RE.exec(line);
+  if (!m || m[3].replace(PHONE_RE, "").replace(/TEL[:：]?|[\s:：,，]/gi, "")) return null;
+  const buyer = buyerOf(m[1] ?? m[2], m[3]);
+  return buyer ? { buyer, match: m[0] } : null;
+}
+
+/** 整行都在講訂購者 */
+function buyerLine(line: string): Buyer | null {
+  for (const re of BUYER_LINE_RES) {
+    const m = re.exec(line);
+    if (m) return buyerOf(m[1], m[2]);
+  }
+  return null;
 }
 
 /** 地址行裡「號／樓」之後的文字，可能接著寫規格 */
@@ -43,24 +88,28 @@ function splitAddress(line: string) {
 }
 
 /** 姓名行：有標籤的直接取；沒有標籤時，取不像規格／付款的短句（同一行的電話、規格先拿掉，例如「巫先生 0979…」「陳美惠5斤×1」） */
-function nameOf(line: string): { name: string; referrer?: string } | null {
-  if (isAddress(line)) return null;
-  const labeled = /^(?:\d\.\s*)?(姓名|收件人|寄送人姓名|訂購人|聯絡人)\s*[:：]?\s*(.+)$/.exec(line);
-  let text = (labeled ? labeled[2] : line).replace(PHONE_RE, " ").replace(/[（(]\s*[)）]/g, "");
+function nameOf(line: string): { name: string; buyer?: Buyer } | null {
+  if (isAddress(line) || buyerLine(line)) return null;
+  const inParen = buyerInParen(line);
+  const labeled = /^(?:[一二三四五六七八九十]、|\d\.\s*)?(姓名|收件人|寄送人姓名|聯絡人)\s*[:：]?\s*(.+)$/.exec(
+    inParen ? line.replace(inParen.match, " ") : line,
+  );
+  let text = (labeled ? labeled[2] : inParen ? line.replace(inParen.match, " ") : line)
+    .replace(PHONE_RE, " ")
+    .replace(/[（(]\s*[)）]/g, "");
   // 姓名後面接著規格：「陳美惠5斤×1」
   text = text
     .replace(/\s*\d+\s*(斤|粒|顆|入|[xX×*]).*$/, "")
     .replace(/[”"、，,:：]+$/g, "")
     .trim();
   if (!labeled && (/\d/.test(text) || NOT_NAME.test(text) || text.length > 20)) return null;
-  const ref = REFERRER_RE.exec(text);
-  const referrer = ref ? (ref[1] ?? ref[2])?.trim() : undefined;
   text = text
     .replace(/[(（][^)）]*[)）]/g, "")
     .replace(/(先生|小姐)?收$/, "$1")
+    .replace(/[”"、，,:：\s]+$/g, "")
     .trim();
   if (!text || !/[一-鿿A-Za-z]/.test(text)) return null;
-  return { name: text, referrer };
+  return { name: text, buyer: inParen?.buyer };
 }
 
 interface ParsedItem {
@@ -257,16 +306,27 @@ export async function parseWordOrders(buffer: Buffer, fileName: string, priceOf?
     }
     const segments = starts.map((s, k) => lines.slice(s, starts[k + 1] ?? lines.length));
 
-    let referrer = "";
+    // 訂購者：獨立一行寫的（通常附電話）優先，其次是收件人姓名後面括號裡的
+    const lineBuyer = lines.map(buyerLine).find(Boolean) ?? null;
+    const parenBuyers: Buyer[] = [];
     const shipments: Shipment[] = segments.map((seg, k) => {
       const nameHit = seg
         .filter((l) => l !== lineLine && !/^現場$/.test(l))
         .map(nameOf)
         .find(Boolean);
-      if (nameHit?.referrer) referrer ||= nameHit.referrer;
+      if (nameHit?.buyer) parenBuyers.push(nameHit.buyer);
       const addrLine = seg.find(isAddress);
       const addr = addrLine ? splitAddress(addrLine) : { zip: "", address: "", extra: "" };
-      const ph = phonesIn(seg.join("\n"));
+      // 訂購者那一行、括號裡的電話是訂購者的，不算收件人
+      const ph = phonesIn(
+        seg
+          .filter((l) => !buyerLine(l))
+          .map((l) => {
+            const b = buyerInParen(l);
+            return b ? l.replace(b.match, " ") : l;
+          })
+          .join("\n"),
+      );
       const items = seg.flatMap((l) => itemsIn(isAddress(l) ? afterAddress(l) : l, defaultProduct));
       return {
         id: `s${k + 1}`,
@@ -328,11 +388,32 @@ export async function parseWordOrders(buffer: Buffer, fileName: string, priceOf?
     // 以下只是提示，不需要人工確認
     if (total === undefined) reasons.push("提示：沒寫金額");
     if (estimated) reasons.push("提示：單價依網站售價估算");
-    if (referrer) reasons.push(`代訂：${referrer}`);
-    if (!shipments[0].recipient.name) reasons.push("沒有姓名");
 
     const first = shipments[0].recipient;
-    const buyerPhones = phonesIn(segments[0].join("\n"));
+    // 括號寫的訂購者，若另一行有寫同一人的電話就合起來
+    const parenBuyer = parenBuyers[0] ?? null;
+    let buyer: Buyer | null = parenBuyer ?? lineBuyer;
+    if (parenBuyer && lineBuyer && lineBuyer.name === parenBuyer.name)
+      buyer = { name: parenBuyer.name, phones: [...parenBuyer.phones, ...lineBuyer.phones] };
+    // 只寫了「訂購人：王小明」：收件人就是訂購者本人
+    if (buyer && !first.name) first.name = buyer.name;
+    const self = !buyer || buyer.name === first.name;
+    if (!self) reasons.push(`提示：訂購者 ${buyer!.name}${buyer!.phones.length ? "" : "（沒有電話）"}，收件人 ${first.name || "？"}`);
+    if (!first.name) reasons.push("沒有姓名");
+
+    // 收件人就是訂購者時，客戶電話用第一位收件人的（加上訂購者那一行的）
+    const recipientPhones = phonesIn(
+      segments[0]
+        .filter((l) => !buyerLine(l))
+        .map((l) => {
+          const b = buyerInParen(l);
+          return b ? l.replace(b.match, " ") : l;
+        })
+        .join("\n"),
+    );
+    const customerPhones = (self ? [...recipientPhones, ...(buyer?.phones ?? [])] : buyer!.phones).filter(
+      (p, i, a) => a.findIndex((x) => x.digits === p.digits) === i,
+    );
     const used = new Set<string>();
     const consumed = (l: string) =>
       isAddress(l) || l === lineLine || nameOf(l) || phonesIn(l).length || itemsIn(l, defaultProduct).length || /^\d{1,2}\/\d{1,2}/.test(l);
@@ -351,8 +432,10 @@ export async function parseWordOrders(buffer: Buffer, fileName: string, priceOf?
       channel,
       brand: "",
       season,
-      buyer: { name: first.name, phone: first.phone, phone2: first.phone2 ?? "", email: "", gender: "" },
-      referrer,
+      buyer: self
+        ? { name: first.name, phone: first.phone, phone2: first.phone2 ?? "", email: "", gender: "" }
+        : { name: buyer!.name, phone: customerPhones[0]?.number ?? "", phone2: customerPhones[1]?.number ?? "", email: "", gender: "" },
+      referrer: "",
       orderedAt,
       items,
       extras: [],
@@ -387,11 +470,13 @@ export async function parseWordOrders(buffer: Buffer, fileName: string, priceOf?
         reviewReasons: reasons,
       },
       customerHint: {
-        name: first.name || first.phone || "（未填姓名）",
-        phones: buyerPhones.length ? buyerPhones : allPhones.slice(0, 1),
+        name: self ? first.name || first.phone || "（未填姓名）" : buyer!.name,
+        phones: self ? (customerPhones.length ? customerPhones : allPhones.slice(0, 1)) : customerPhones,
         emails: [],
         lineName,
-        address: first.address ? { zip: first.zip ?? "", address: first.address, lastUsedAt: orderedAt } : undefined,
+        // 收件地址是送禮對象的，不是訂購者的
+        address: self && first.address ? { zip: first.zip ?? "", address: first.address, lastUsedAt: orderedAt } : undefined,
+        matchByName: !self && !customerPhones.length,
         source: channel === "LINE" ? "LINE" : channel === "現場" ? "現場" : "電話",
       },
     });

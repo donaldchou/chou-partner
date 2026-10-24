@@ -15,7 +15,10 @@ export const digitsOf = (s: unknown) => String(s ?? "").replace(/\D/g, "");
 
 /** 台灣電話：手機 09 開頭 10 碼，市話 0 開頭 9–10 碼（不含分機） */
 export function toPhone(raw: unknown): Phone | null {
-  const text = String(raw ?? "").trim();
+  // 數字旁邊的英文 O 是打錯的 0（O6-24384O8）
+  const text = String(raw ?? "")
+    .trim()
+    .replace(/[Oo](?=[\d\-Oo])|(?<=[\d\-])[Oo]/g, "0");
   const main = text.split(/#|分機|轉/)[0];
   let d = digitsOf(main);
   if (d.startsWith("886")) d = "0" + d.slice(3);
@@ -24,6 +27,51 @@ export function toPhone(raw: unknown): Phone | null {
   const mobile = d.startsWith("09");
   const number = mobile ? `${d.slice(0, 4)}-${d.slice(4, 7)}-${d.slice(7)}` : formatLandline(d);
   return { number: text.includes("#") ? `${number}#${digitsOf(text.split("#")[1])}` : number, digits: d, type: mobile ? "手機" : "市話" };
+}
+
+/** 縣市 → 市話區碼、區碼後面的號碼長度 */
+const AREAS: { re: RegExp; code: string; lengths: number[] }[] = [
+  { re: /[台臺]北|新北|基隆/, code: "02", lengths: [8] },
+  { re: /桃園|新竹|宜蘭|花蓮/, code: "03", lengths: [7] },
+  { re: /苗栗/, code: "037", lengths: [6] },
+  { re: /[台臺]中|彰化/, code: "04", lengths: [7, 8] },
+  { re: /南投/, code: "049", lengths: [7] },
+  { re: /嘉義|雲林/, code: "05", lengths: [7] },
+  { re: /[台臺]南|澎湖/, code: "06", lengths: [7] },
+  { re: /高雄/, code: "07", lengths: [7] },
+  { re: /屏東/, code: "08", lengths: [7] },
+  { re: /[台臺]東/, code: "089", lengths: [6] },
+  { re: /金門/, code: "082", lengths: [6] },
+  { re: /連江|馬祖/, code: "0836", lengths: [4] },
+];
+
+/** 郵遞區號前三碼範圍 → 區碼 */
+const ZIP_AREAS: [number, number, string][] = [
+  [100, 116, "02"], [200, 208, "02"], [209, 212, "0836"], [220, 253, "02"],
+  [260, 272, "03"], [300, 338, "03"], [350, 369, "037"], [400, 439, "04"],
+  [500, 530, "04"], [540, 558, "049"], [600, 655, "05"], [700, 745, "06"],
+  [800, 852, "07"], [880, 885, "06"], [890, 896, "082"], [900, 947, "08"],
+  [950, 966, "089"], [970, 983, "03"],
+];
+
+function areaOf(address: string, zip: string) {
+  // 地址裡最先出現的縣市（避免「新竹縣…台中路」被當成台中）
+  const hit = AREAS.map((a) => ({ a, i: address.search(a.re) }))
+    .filter((x) => x.i >= 0)
+    .sort((x, y) => x.i - y.i)[0];
+  if (hit) return hit.a;
+  const z = Number(digitsOf(zip).slice(0, 3));
+  const code = ZIP_AREAS.find(([lo, hi]) => z >= lo && z <= hi)?.[2];
+  return code ? AREAS.find((a) => a.code === code)! : null;
+}
+
+/** 市話漏了區碼（例如 26751498）：依地址、郵遞區號的縣市補上；號碼長度跟該區不符就不補 */
+export function withAreaCode(raw: unknown, address: string, zip: string): string | null {
+  const text = String(raw ?? "").trim();
+  const d = digitsOf(text.split(/#|分機|轉/)[0]);
+  if (!d || d.startsWith("0")) return null;
+  const area = areaOf(address, zip);
+  return area?.lengths.includes(d.length) ? area.code + text : null;
 }
 
 function formatLandline(d: string) {

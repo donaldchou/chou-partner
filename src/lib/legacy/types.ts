@@ -12,6 +12,8 @@ export interface ImportOrder extends Omit<Order, "id" | "customerId" | "legacy">
     lineName?: string;
     address?: Address;
     source: CustomerSource;
+    /** 訂購者沒留電話：依姓名找同一批匯入、同樣沒電話的客戶 */
+    matchByName?: boolean;
   };
 }
 

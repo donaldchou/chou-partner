@@ -98,7 +98,16 @@ export async function importOrders(orders: ImportOrder[], onProgress?: (msg: str
     c.phones.forEach((p) => p.digits && byPhone.set(p.digits, c._id));
     c.addresses.forEach((a) => byNameAddr.set(`${c.name}|${a.address}`, c._id));
   };
+  // 沒電話的訂購者（「許安豪 (林永銘寄)」）依姓名找電話／LINE／現場來的客戶（不比網站客戶，避免同名不同人）；
+  // 同名有好幾位、或只是「X先生」這類稱呼就不比
+  const byWordName = new Map<string, string>();
+  const indexName = (c: CustomerDoc) => {
+    if (!c.sources.some((s) => s !== "網站") || /(先生|小姐|太太|女士)$/.test(c.name)) return;
+    const cur = byWordName.get(c.name);
+    byWordName.set(c.name, cur === undefined || cur === c._id ? c._id : "");
+  };
   customers.forEach(index);
+  customers.forEach(indexName);
 
   const created = new Set<string>();
   const touched = new Set<string>();
@@ -116,6 +125,11 @@ export async function importOrders(orders: ImportOrder[], onProgress?: (msg: str
     const h = o.customerHint;
     let cid = h.phones.map((p) => byPhone.get(p.digits)).find(Boolean);
     if (!cid && !h.phones.length && h.address) cid = byNameAddr.get(`${h.name}|${h.address.address}`);
+    // 沒電話的訂購者找同名客戶；有電話但沒對到的，也可以併進先前建的同名、沒電話的訂購者
+    if (!cid && h.source !== "網站") {
+      const same = byWordName.get(h.name);
+      if (same && (h.matchByName || !customers.get(same)!.phones.length)) cid = same;
+    }
 
     if (!cid) {
       cid = uid("c");
@@ -159,6 +173,7 @@ export async function importOrders(orders: ImportOrder[], onProgress?: (msg: str
       lastSeen.set(cid, o.orderedAt);
     }
     index(c);
+    indexName(c);
 
     // 訂單編號重複時加上流水號
     let orderNo = o.orderNo;
