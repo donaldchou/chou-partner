@@ -146,10 +146,10 @@ export async function getRaw(name: string, id: string) {
   return name === "users" ? publicUser(doc) : toClient(doc);
 }
 
-export async function deleteRow(name: string, id: string, cascade: boolean) {
+export async function deleteRow(name: string, id: string, cascade: boolean, by: string) {
   if (name === "users") throw new HttpError(400, "使用者帳號請到「使用者管理」刪除");
   collectionOf(name);
   if (name === "customers") return deleteCustomer(id, cascade);
-  if (name === "orders") return deleteOrder(id);
+  if (name === "orders") return deleteOrder(id, by);
   return deleteDoc(name as "products" | "agencies" | "bookings" | "groupBuys", id, cascade);
 }

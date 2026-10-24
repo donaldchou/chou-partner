@@ -1,7 +1,8 @@
 import { CustomerModel } from "@/models/customer";
 import { OrderModel } from "@/models/order";
 import { HttpError, fromClient, toClient } from "./api";
-import { assertNoInlineFiles, collectFileUrls, deleteFiles, deleteRemovedFiles } from "./storage";
+import { assertNoInlineFiles, deleteRemovedFiles } from "./storage";
+import { trashOrder } from "./deleted-orders";
 import { suspectFilter } from "./customer-quality";
 import { recomputeStats } from "./customer-stats";
 import { connectDB } from "./mongodb";
@@ -151,13 +152,9 @@ export async function createOrder(body: Data) {
   return (await saveOrder(typeof body.id === "string" && body.id ? body.id : uid("o"), body)).doc;
 }
 
-export async function deleteOrder(id: string) {
-  await connectDB();
-  const doc = (await OrderModel.findById(id).lean()) as unknown as (Order & { _id: string }) | null;
-  if (!doc) throw new HttpError(404, "找不到訂單");
-  await OrderModel.deleteOne({ _id: id });
-  await recomputeStats([doc.customerId]);
-  await deleteFiles(collectFileUrls(doc));
+/** 刪除訂單：先移到後台「已刪除紀錄」，可以還原；永久刪除才會真的刪掉（見 deleted-orders.ts） */
+export async function deleteOrder(id: string, by: string) {
+  await trashOrder(id, by);
 }
 
 /** GET /api/stats：儀表板統計 */

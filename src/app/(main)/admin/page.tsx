@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, KeyRound, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Eye, KeyRound, Plus, RefreshCw, RotateCcw, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import {
   Badge,
@@ -20,10 +20,12 @@ import {
 import { UnlockPanel } from "@/components/unlock";
 import { alertError, api, isCancelled, useMe } from "@/lib/store";
 import { openStoredFile, photoSrc } from "@/lib/upload";
+import { itemsText } from "@/lib/calc";
+import type { Order } from "@/lib/types";
 import { useFetch } from "@/lib/use-fetch";
-import { cn } from "@/lib/utils";
+import { cn, money } from "@/lib/utils";
 
-type Tab = "users" | "data" | "files";
+type Tab = "users" | "data" | "deleted" | "files";
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("users");
@@ -37,10 +39,11 @@ export default function AdminPage() {
         tabs={[
           { value: "users", label: "使用者管理" },
           { value: "data", label: "所有資料" },
+          { value: "deleted", label: "已刪除紀錄" },
           { value: "files", label: "清理未使用的檔案" },
         ]}
       />
-      {tab === "users" ? <UsersTab /> : tab === "data" ? <DataTab /> : <FilesTab />}
+      {tab === "users" ? <UsersTab /> : tab === "data" ? <DataTab /> : tab === "deleted" ? <DeletedOrdersTab /> : <FilesTab />}
     </div>
   );
 }
@@ -396,6 +399,233 @@ function FilesTab() {
   );
 }
 
+/* ---------------- 已刪除紀錄 ---------------- */
+
+type DeletedRow = {
+  id: string;
+  orderNo: string;
+  customerId: string;
+  customerName: string;
+  buyerName: string;
+  total: number;
+  orderedAt: string;
+  deletedAt: string;
+  deletedBy: string;
+};
+type DeletedDetail = DeletedRow & { order: Order; customerExists: boolean };
+
+const fmtLocal = (s: string) => (s ? s.replace("T", " ").slice(0, 16) : "—");
+
+function DeletedOrdersTab() {
+  const [kw, setKw] = useState("");
+  const [page, setPage] = useState(1);
+  const q = useDebounced(kw.trim());
+  const { data, loading, error, reload } = useFetch(JSON.stringify({ deleted: 1, q, page }), () =>
+    api<{ items: DeletedRow[]; total: number; page: number; limit: number }>(
+      `/api/admin/deleted-orders?${new URLSearchParams({ q, page: String(page) })}`,
+    ),
+  );
+  const [viewing, setViewing] = useState<DeletedRow | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function restore(r: DeletedRow) {
+    if (!confirm(`確定還原訂單 ${r.orderNo}（${r.customerName || r.buyerName}）？\n還原後會回到訂單列表，客戶的訂單數與金額也會重新計算。`)) return;
+    setBusy(true);
+    try {
+      await api(`/api/admin/deleted-orders/${encodeURIComponent(r.id)}/restore`, { method: "POST" });
+      alert(`訂單 ${r.orderNo} 已還原`);
+      setViewing(null);
+      reload();
+    } catch (e) {
+      alertError("還原失敗", e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function purge(r: DeletedRow) {
+    if (!confirm(`確定永久刪除訂單 ${r.orderNo}（${r.customerName || r.buyerName}）？\n永久刪除後無法還原。`)) return;
+    setBusy(true);
+    try {
+      await api(`/api/admin/deleted-orders/${encodeURIComponent(r.id)}`, { method: "DELETE" });
+      setViewing(null);
+      reload();
+    } catch (e) {
+      alertError("刪除失敗", e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="max-w-3xl text-sm text-slate-500">
+          刪除的訂單會先放在這裡，可以檢視、還原回訂單列表，或永久刪除。客戶整筆被刪除時，他的訂單不會進到這裡。
+        </p>
+        <div className="relative w-full max-w-xs">
+          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Input
+            value={kw}
+            onChange={(e) => {
+              setKw(e.target.value);
+              setPage(1);
+            }}
+            placeholder="搜尋單號、客戶、刪除者…"
+            className="pl-9"
+          />
+        </div>
+      </div>
+      {error && <p className="mb-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {data && (
+        <p className="mb-3 text-sm text-slate-700">
+          共 {data.total.toLocaleString()} 筆已刪除的訂單{loading && "，更新中…"}
+        </p>
+      )}
+      <Table head={["刪除時間", "訂單", "客戶／訂購人", "金額", "刪除者", ""]}>
+        {data?.items.map((r) => (
+          <tr key={r.id} className="hover:bg-slate-50">
+            <Td className="whitespace-nowrap text-slate-600">{fmtLocal(r.deletedAt)}</Td>
+            <Td>
+              <div className="font-medium text-slate-800">{r.orderNo}</div>
+              <div className="text-xs text-slate-400">下單 {fmtLocal(r.orderedAt).slice(0, 10)}</div>
+            </Td>
+            <Td>
+              <div className="text-slate-800">{r.customerName || "—"}</div>
+              {r.buyerName && r.buyerName !== r.customerName && <div className="text-xs text-slate-400">訂購人 {r.buyerName}</div>}
+            </Td>
+            <Td className="whitespace-nowrap text-slate-700">{money(r.total)}</Td>
+            <Td className="max-w-48 truncate text-slate-500">{r.deletedBy || "—"}</Td>
+            <Td className="whitespace-nowrap text-right">
+              <Button variant="ghost" className="px-2 py-1.5" onClick={() => setViewing(r)}>
+                <Eye size={14} /> 檢視
+              </Button>
+              <Button variant="ghost" className="px-2 py-1.5 text-brand-700" disabled={busy} onClick={() => restore(r)}>
+                <RotateCcw size={14} /> 還原
+              </Button>
+              <Button variant="ghost" className="px-2 py-1.5 text-red-600" disabled={busy} onClick={() => purge(r)}>
+                <Trash2 size={14} /> 刪除
+              </Button>
+            </Td>
+          </tr>
+        ))}
+        {data && !data.items.length && (
+          <tr>
+            <Td colSpan={6} className="py-8 text-center text-slate-400">
+              {q ? "沒有符合的紀錄" : "沒有已刪除的訂單"}
+            </Td>
+          </tr>
+        )}
+        {!data && !error && (
+          <tr>
+            <Td colSpan={6} className="py-8 text-center text-slate-400">
+              載入中…
+            </Td>
+          </tr>
+        )}
+      </Table>
+      {data && <Pagination page={page} limit={data.limit} total={data.total} onChange={setPage} />}
+      {viewing && (
+        <DeletedOrderModal row={viewing} busy={busy} onClose={() => setViewing(null)} onRestore={() => restore(viewing)} onPurge={() => purge(viewing)} />
+      )}
+    </>
+  );
+}
+
+function DeletedOrderModal({
+  row,
+  busy,
+  onClose,
+  onRestore,
+  onPurge,
+}: {
+  row: DeletedRow;
+  busy: boolean;
+  onClose: () => void;
+  onRestore: () => void;
+  onPurge: () => void;
+}) {
+  const { data, error } = useFetch(`deleted:${row.id}`, () => api<DeletedDetail>(`/api/admin/deleted-orders/${encodeURIComponent(row.id)}`));
+  const [raw, setRaw] = useState(false);
+  const o = data?.order;
+  const line = (label: string, value: React.ReactNode) => (
+    <div className="flex gap-3 py-1">
+      <dt className="w-20 shrink-0 text-slate-400">{label}</dt>
+      <dd className="min-w-0 flex-1 text-slate-800">{value || "—"}</dd>
+    </div>
+  );
+  return (
+    <Modal
+      open
+      wide
+      onClose={onClose}
+      title={`已刪除的訂單：${row.orderNo}`}
+      footer={
+        <>
+          <Button variant="danger" className="mr-auto" disabled={busy} onClick={onPurge}>
+            <Trash2 size={15} /> 永久刪除
+          </Button>
+          <Button variant="secondary" onClick={onClose}>
+            關閉
+          </Button>
+          <Button disabled={busy || data?.customerExists === false} onClick={onRestore}>
+            <RotateCcw size={15} /> 還原
+          </Button>
+        </>
+      }
+    >
+      {error ? (
+        <p className="text-sm text-red-600">{error}</p>
+      ) : !o || !data ? (
+        <Spinner />
+      ) : (
+        <div className="space-y-4 text-sm">
+          <div className="rounded-lg bg-amber-50 px-4 py-2.5 text-amber-800">
+            {fmtLocal(data.deletedAt)} 由 {data.deletedBy || "—"} 刪除
+            {!data.customerExists && <span className="ml-1 font-medium text-red-700">・這位客戶已被刪除，無法還原</span>}
+          </div>
+          <dl>
+            {line("訂單編號", o.orderNo)}
+            {line("下單時間", fmtLocal(o.orderedAt))}
+            {line("通路", `${o.channel}${o.season ? `・${o.season} 產季` : ""}`)}
+            {line("客戶", data.customerName)}
+            {line("訂購人", [o.buyer?.name, o.buyer?.phone, o.buyer?.phone2].filter(Boolean).join("　"))}
+            {line("品項", itemsText(o.items) || "（沒有品項）")}
+            {line(
+              "收件人",
+              o.shipments?.length ? (
+                <ul className="space-y-1">
+                  {o.shipments.map((s) => (
+                    <li key={s.id}>
+                      {[s.recipient.name, s.recipient.phone].filter(Boolean).join("　")}
+                      <span className="text-slate-500">　{[s.recipient.zip, s.recipient.address].filter(Boolean).join(" ")}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null,
+            )}
+            {line("金額", `${money(o.amounts?.total ?? 0)}（品項 ${money(o.amounts?.items ?? 0)}，運費 ${money(o.amounts?.shipping ?? 0)}，調整 ${money(o.amounts?.adjust ?? 0)}）`)}
+            {line("狀態", `${o.status}・${o.payment?.method || "付款方式未填"}・${o.payment?.status ?? ""}`)}
+            {line("備註", o.note)}
+            {line("內部備註", o.internalNote)}
+            {o.legacy && line("匯入來源", `${o.legacy.file}${o.legacy.needsReview ? "（待確認）" : ""}`)}
+          </dl>
+          <div>
+            <button type="button" className="text-xs text-brand-700 hover:underline" onClick={() => setRaw((v) => !v)}>
+              {raw ? "隱藏原始資料" : "顯示原始資料"}
+            </button>
+            {raw && (
+              <pre className="mt-2 max-h-[50vh] overflow-auto whitespace-pre-wrap break-all rounded-lg bg-white p-4 font-mono text-xs leading-relaxed text-slate-700 ring-1 ring-slate-200">
+                {JSON.stringify(o, null, 2)}
+              </pre>
+            )}
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 /* ---------------- 所有資料 ---------------- */
 
 type CollectionInfo = { name: string; label: string; count: number };
@@ -424,7 +654,11 @@ function DataTab() {
 
   async function askDelete(r: Row) {
     const cascade = CASCADE[name];
-    if (!confirm(`即將刪除${current?.label ?? ""}「${r.title}」${cascade ? `，並一起刪除${cascade}` : ""}，無法復原。確定嗎？`)) return;
+    const msg =
+      name === "orders"
+        ? `即將刪除訂單「${r.title}」，訂單會移到「已刪除紀錄」，之後可以還原。確定嗎？`
+        : `即將刪除${current?.label ?? ""}「${r.title}」${cascade ? `，並一起刪除${cascade}` : ""}，無法復原。確定嗎？`;
+    if (!confirm(msg)) return;
     try {
       await api(`/api/admin/data/${name}/${encodeURIComponent(r.id)}${cascade ? "?cascade=true" : ""}`, { method: "DELETE" });
       setViewing(null);

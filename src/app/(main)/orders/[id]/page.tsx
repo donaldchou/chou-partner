@@ -58,9 +58,13 @@ export default function OrderDetailPage() {
           <Button
             variant="danger"
             onClick={async () => {
-              if (!confirm(`確定刪除訂單 ${order.orderNo}？`)) return;
-              await ordersApi.remove(order.id);
-              router.push("/orders");
+              if (!confirm(`確定刪除訂單 ${order.orderNo}？\n刪除後會移到「後台管理 → 已刪除紀錄」，之後可以還原。`)) return;
+              try {
+                await ordersApi.remove(order.id);
+                router.push("/orders");
+              } catch (e) {
+                alertError("刪除失敗", e);
+              }
             }}
           >
             刪除

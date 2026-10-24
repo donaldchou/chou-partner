@@ -20,9 +20,10 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 /** DELETE /api/admin/data/<collection>/<id>?cascade=true（客戶連訂單、旅行社連預約一起刪） */
 export async function DELETE(req: NextRequest, ctx: Ctx) {
   try {
-    await requireUnlocked(await requireAdmin());
+    const user = await requireAdmin();
+    await requireUnlocked(user);
     const { collection, id } = await ctx.params;
-    await deleteRow(collection, id, req.nextUrl.searchParams.get("cascade") === "true");
+    await deleteRow(collection, id, req.nextUrl.searchParams.get("cascade") === "true", user.email);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return handleError(err);

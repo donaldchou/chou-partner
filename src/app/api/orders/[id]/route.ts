@@ -31,9 +31,9 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
 /** DELETE /api/orders/<id> */
 export async function DELETE(_req: NextRequest, ctx: Ctx) {
   try {
-    // 新增、修改、刪除都要驗證碼
-    await requireEditor();
-    await deleteOrder((await ctx.params).id);
+    // 新增、修改、刪除都要驗證碼；刪除的訂單會移到後台「已刪除紀錄」
+    const user = await requireEditor();
+    await deleteOrder((await ctx.params).id, user.email);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return handleError(err);
