@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CircleHelp, LayoutGrid, List } from "lucide-react";
 import {
   agencyCity,
+  AgencyStatusBadge,
   AgencyStatusButton,
   agencyStatus,
   FruitTourBadge,
@@ -13,15 +14,16 @@ import {
   LicenseBadge,
 } from "@/components/AgencyStatus";
 import { Card, Empty, Input, LinkButton, PageHeader, Select, Table, Tabs, Td } from "@/components/ui";
-import { AGENCY_LICENSES, COUNTIES } from "@/lib/enums";
+import { AGENCY_LICENSES, AGENCY_STATUSES, COUNTIES } from "@/lib/enums";
 import { usePersistentState } from "@/lib/persist";
 import { useAppState, useCanEdit } from "@/lib/store";
 import type { Agency, AgencyStatus, Booking } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type View = "card" | "list";
+type Tab = "全部" | AgencyStatus;
 /** 這一頁的所有設定都記在瀏覽器，F5 重新整理不會還原 */
-const DEFAULTS = { tab: "配合中" as AgencyStatus, view: "card" as View, city: "", license: "", fruitOnly: false, kw: "" };
+const DEFAULTS = { tab: "配合中" as Tab, view: "card" as View, city: "", license: "", fruitOnly: false, kw: "" };
 
 export default function AgenciesPage() {
   const { agencies, bookings } = useAppState();
@@ -29,7 +31,7 @@ export default function AgenciesPage() {
   const [s, set] = usePersistentState("chou-partner:agencies-page", DEFAULTS);
   const { tab, view, city, license, fruitOnly, kw } = s;
 
-  const inTab = (st: AgencyStatus) => agencies.filter((a) => agencyStatus(a) === st);
+  const inTab = (st: Tab) => (st === "全部" ? agencies : agencies.filter((a) => agencyStatus(a) === st));
   // 縣市選項：這個分頁裡有的縣市，依 COUNTIES 的北到南順序
   const cities: string[] = COUNTIES.filter((c) => inTab(tab).some((a) => agencyCity(a) === c));
   const list = inTab(tab).filter(
@@ -42,7 +44,8 @@ export default function AgenciesPage() {
         .join(" ")
         .includes(kw.trim()),
   );
-  // 有採果行程的排前面
+  // 全部：依配合中、待聯絡、無意願排；待聯絡：有採果行程的排前面
+  if (tab === "全部") list.sort((x, y) => AGENCY_STATUSES.indexOf(agencyStatus(x)) - AGENCY_STATUSES.indexOf(agencyStatus(y)));
   if (tab === "待聯絡") list.sort((x, y) => Number(!!y.fruitTour) - Number(!!x.fruitTour));
   const filtering = !!(city || license || fruitOnly || kw.trim());
 
@@ -50,17 +53,14 @@ export default function AgenciesPage() {
     <div>
       <PageHeader
         title="旅行社管理"
-        subtitle="管理合作旅行社與其領隊、司機；待聯絡名單聯絡完成後可轉為配合中"
+        subtitle="管理合作旅行社與其領隊、司機；待聯絡名單聯絡後可轉為洽談中、配合中或無意願"
         actions={<LinkButton href="/tours/agencies/new">＋ 新增旅行社</LinkButton>}
       />
 
       <Tabs
         value={tab}
         onChange={(v) => set({ tab: v })}
-        tabs={[
-          { value: "配合中", label: "配合中", count: inTab("配合中").length },
-          { value: "待聯絡", label: "待聯絡", count: inTab("待聯絡").length },
-        ]}
+        tabs={(["全部", ...AGENCY_STATUSES] as Tab[]).map((t) => ({ value: t, label: t, count: inTab(t).length }))}
       />
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
@@ -141,11 +141,11 @@ export default function AgenciesPage() {
       {list.length === 0 ? (
         <Empty>沒有符合的旅行社</Empty>
       ) : view === "list" ? (
-        <AgencyTable list={list} bookings={bookings} pending={tab === "待聯絡"} canEdit={canEdit} />
+        <AgencyTable list={list} bookings={bookings} tab={tab} canEdit={canEdit} />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
           {list.map((a) => (
-            <AgencyCard key={a.id} a={a} bookings={bookings} canEdit={canEdit} />
+            <AgencyCard key={a.id} a={a} bookings={bookings} canEdit={canEdit} showStatus={tab === "全部"} />
           ))}
         </div>
       )}
@@ -153,19 +153,21 @@ export default function AgenciesPage() {
   );
 }
 
-function AgencyCard({ a, bookings, canEdit }: { a: Agency; bookings: Booking[]; canEdit: boolean }) {
+function AgencyCard({ a, bookings, canEdit, showStatus }: { a: Agency; bookings: Booking[]; canEdit: boolean; showStatus: boolean }) {
   const bs = bookings.filter((b) => b.agencyId === a.id);
   const leaders = a.people.filter((p) => p.role === "領隊");
   const drivers = a.people.filter((p) => p.role === "司機");
-  const pending = agencyStatus(a) === "待聯絡";
+  // 待聯絡、無意願都還不是合作對象：顯示採果行程與狀態按鈕
+  const pending = agencyStatus(a) !== "配合中";
   return (
     <Link href={`/tours/agencies/${a.id}`}>
-      <Card className="flex h-full flex-col transition hover:border-brand-300 hover:shadow">
+      <Card className={cn("flex h-full flex-col transition hover:border-brand-300 hover:shadow", agencyStatus(a) === "無意願" && "opacity-75")}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="text-lg font-semibold text-slate-800">{a.name}</div>
-            {(a.license || agencyCity(a)) && (
+            {(showStatus || a.license || agencyCity(a)) && (
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                {showStatus && <AgencyStatusBadge agency={a} />}
                 <LicenseBadge license={a.license} />
                 {agencyCity(a) && <span className="text-xs text-slate-500">{agencyCity(a)}</span>}
               </div>
@@ -185,7 +187,11 @@ function AgencyCard({ a, bookings, canEdit }: { a: Agency; bookings: Booking[]; 
         {pending ? (
           <>
             {a.fruitTour && <p className="mt-3 line-clamp-2 text-sm text-accent-600">{a.fruitTour}</p>}
-            {canEdit && <AgencyStatusButton agency={a} className="mt-4 self-start" />}
+            {canEdit && (
+              <div className="mt-4">
+                <AgencyStatusButton agency={a} allowDecline />
+              </div>
+            )}
           </>
         ) : (
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -205,21 +211,29 @@ function AgencyCard({ a, bookings, canEdit }: { a: Agency; bookings: Booking[]; 
 }
 
 /** 清單：一列一間，點整列進總覽 */
-function AgencyTable({ list, bookings, pending, canEdit }: { list: Agency[]; bookings: Booking[]; pending: boolean; canEdit: boolean }) {
+function AgencyTable({ list, bookings, tab, canEdit }: { list: Agency[]; bookings: Booking[]; tab: Tab; canEdit: boolean }) {
   const router = useRouter();
+  // 配合中看領隊／司機與預約；其他分頁（含全部）看採果行程與狀態按鈕
+  const pending = tab !== "配合中";
+  const head = ["旅行社", ...(tab === "全部" ? ["狀態"] : []), "種類", "縣市", "電話", pending ? "採果行程" : "領隊／司機", pending ? "" : "預約"];
   return (
-    <Table head={["旅行社", "種類", "縣市", "電話", pending ? "採果行程" : "領隊／司機", pending ? "" : "預約"]}>
+    <Table head={head}>
       {list.map((a) => {
         const leaders = a.people.filter((p) => p.role === "領隊").length;
         const drivers = a.people.filter((p) => p.role === "司機").length;
         return (
-          <tr key={a.id} onClick={() => router.push(`/tours/agencies/${a.id}`)} className="cursor-pointer hover:bg-slate-50">
+          <tr key={a.id} onClick={() => router.push(`/tours/agencies/${a.id}`)} className="cursor-pointer transition-colors hover:bg-brand-100">
             <Td>
               <Link href={`/tours/agencies/${a.id}`} className="font-medium text-slate-800 hover:text-brand-700">
                 {a.name}
               </Link>
               {a.contactName && <div className="text-xs text-slate-500">{a.contactName}</div>}
             </Td>
+            {tab === "全部" && (
+              <Td>
+                <AgencyStatusBadge agency={a} />
+              </Td>
+            )}
             <Td>
               <LicenseBadge license={a.license} />
             </Td>
@@ -241,7 +255,9 @@ function AgencyTable({ list, bookings, pending, canEdit }: { list: Agency[]; boo
                     <span className="text-slate-300">-</span>
                   )}
                 </Td>
-                <Td className="whitespace-nowrap text-right">{canEdit && <AgencyStatusButton agency={a} className="px-2.5 py-1.5 text-xs" />}</Td>
+                <Td className="whitespace-nowrap text-right">
+                  {canEdit && <AgencyStatusButton agency={a} allowDecline compact />}
+                </Td>
               </>
             ) : (
               <>

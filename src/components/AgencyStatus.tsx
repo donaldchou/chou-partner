@@ -33,7 +33,7 @@ export function LicenseBadge({ license }: { license?: string }) {
     <span
       title={LICENSE_HELP[license]}
       className={cn(
-        "cursor-help",
+        "cursor-help whitespace-nowrap",
         "rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset",
         license === "乙種" ? "bg-sky-50 text-sky-700 ring-sky-600/20" : "bg-slate-100 text-slate-600 ring-slate-500/20",
       )}
@@ -62,8 +62,14 @@ export function AgencyStatusBadge({ agency }: { agency: Partner }) {
   return (
     <span
       className={cn(
-        "rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset",
-        s === "配合中" ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20" : "bg-amber-50 text-amber-800 ring-amber-600/20",
+        "whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset",
+        s === "配合中"
+          ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20"
+          : s === "洽談中"
+            ? "bg-sky-50 text-sky-700 ring-sky-600/20"
+            : s === "待聯絡"
+              ? "bg-amber-50 text-amber-800 ring-amber-600/20"
+              : "bg-slate-100 text-slate-500 ring-slate-500/20",
       )}
     >
       {s}
@@ -71,32 +77,65 @@ export function AgencyStatusBadge({ agency }: { agency: Partner }) {
   );
 }
 
-/** 待聯絡 → 配合中（聯絡完成、有意願配合）；配合中可改回待聯絡。onSave 不給時存成旅行社 */
+/**
+ * 狀態切換按鈕。allowDecline（旅行社、團購業者）時：
+ * - 待聯絡 → 配合中／洽談中／無意願
+ * - 洽談中 → 配合中／無意願／改回待聯絡
+ * - 配合中、無意願 → 改回待聯絡
+ * 沒有 allowDecline（團購業者）時只有 待聯絡 ⇄ 配合中。onSave 不給時存成旅行社；className 套在每顆按鈕上
+ */
 export function AgencyStatusButton<T extends Partner>({
   agency,
   className,
+  allowDecline = false,
+  compact = false,
   onSave = (a) => actions.saveAgency(a as unknown as Agency),
 }: {
   agency: T;
   className?: string;
+  allowDecline?: boolean;
+  /** 清單用：小按鈕、不換行、文字精簡 */
+  compact?: boolean;
   onSave?: (a: T) => void;
 }) {
-  const toActive = agencyStatus(agency) === "待聯絡";
-  return (
-    <Button
-      variant={toActive ? "primary" : "secondary"}
-      className={className}
-      onClick={(e) => {
-        // 可能放在連結卡片裡：只切換，不跳頁
-        e.preventDefault();
-        e.stopPropagation();
-        const msg = toActive
-          ? `「${agency.name}」聯絡完成、有意願配合，轉到「配合中」？`
-          : `把「${agency.name}」改回「待聯絡」？`;
-        if (confirm(msg)) onSave({ ...agency, status: toActive ? "配合中" : "待聯絡" });
-      }}
-    >
-      {toActive ? "✓ 轉為配合中" : "改回待聯絡"}
+  className = cn(compact && "px-2.5 py-1.5 text-xs", className);
+  const status = agencyStatus(agency);
+  const change = (e: React.MouseEvent, to: AgencyStatus, msg: string) => {
+    // 可能放在連結卡片或可點的列裡：只切換，不跳頁
+    e.preventDefault();
+    e.stopPropagation();
+    if (confirm(msg)) onSave({ ...agency, status: to });
+  };
+  const backToPending = (
+    <Button variant="secondary" className={className} onClick={(e) => change(e, "待聯絡", `把「${agency.name}」改回「待聯絡」？`)}>
+      改回待聯絡
     </Button>
+  );
+  if (status === "配合中" || status === "無意願") return backToPending;
+  return (
+    <span className={cn("inline-flex", compact ? "flex-nowrap gap-1.5" : "flex-wrap gap-2")}>
+      <Button className={className} onClick={(e) => change(e, "配合中", `「${agency.name}」談好了、有意願配合，轉到「配合中」？`)}>
+        {compact ? "✓ 配合中" : "✓ 轉為配合中"}
+      </Button>
+      {allowDecline && status === "待聯絡" && (
+        <Button
+          variant="secondary"
+          className={cn("text-sky-700", className)}
+          onClick={(e) => change(e, "洽談中", `「${agency.name}」已經聯絡上、正在洽談，轉到「洽談中」？`)}
+        >
+          💬 洽談中
+        </Button>
+      )}
+      {allowDecline && (
+        <Button
+          variant="secondary"
+          className={cn("text-slate-500", className)}
+          onClick={(e) => change(e, "無意願", `「${agency.name}」聯絡過但沒有意願配合，轉到「無意願」？`)}
+        >
+          ✗ 無意願
+        </Button>
+      )}
+      {status === "洽談中" && backToPending}
+    </span>
   );
 }

@@ -65,7 +65,7 @@ export default function GroupBuyerDetailPage() {
         }
         actions={
           <>
-            <AgencyStatusButton agency={b} onSave={saveBuyer} />
+            <AgencyStatusButton agency={b} onSave={saveBuyer} allowDecline />
             <LinkButton href={`/group-buys/new?buyer=${b.id}`}>＋ 新增團購</LinkButton>
           </>
         }

@@ -59,7 +59,7 @@ export default function AgencyDetailPage() {
         }
         actions={
           <>
-            <AgencyStatusButton agency={a} />
+            <AgencyStatusButton agency={a} allowDecline />
             <LinkButton href={`/tours/bookings/new?agency=${a.id}`}>＋ 新增採果預約</LinkButton>
           </>
         }

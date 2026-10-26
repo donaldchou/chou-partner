@@ -3,19 +3,20 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LayoutGrid, List } from "lucide-react";
-import { agencyCity, AgencyStatusButton, agencyStatus, FruitTourBadge } from "@/components/AgencyStatus";
+import { agencyCity, AgencyStatusBadge, AgencyStatusButton, agencyStatus, FruitTourBadge } from "@/components/AgencyStatus";
 import { KindBadge, shortLink } from "@/components/GroupBuyerFields";
 import { Card, Empty, Input, LinkButton, PageHeader, Select, Table, Tabs, Td } from "@/components/ui";
 import { groupBuyTotal } from "@/lib/calc";
-import { COUNTIES, GROUP_BUYER_KINDS } from "@/lib/enums";
+import { AGENCY_STATUSES, COUNTIES, GROUP_BUYER_KINDS } from "@/lib/enums";
 import { usePersistentState } from "@/lib/persist";
 import { actions, useAppState, useCanEdit } from "@/lib/store";
 import type { AgencyStatus, GroupBuy, GroupBuyer } from "@/lib/types";
 import { cn, money } from "@/lib/utils";
 
 type View = "card" | "list";
+type Tab = "全部" | AgencyStatus;
 /** 這一頁的所有設定都記在瀏覽器，F5 重新整理不會還原 */
-const DEFAULTS = { tab: "配合中" as AgencyStatus, view: "card" as View, city: "", kind: "", fruitOnly: false, kw: "" };
+const DEFAULTS = { tab: "配合中" as Tab, view: "card" as View, city: "", kind: "", fruitOnly: false, kw: "" };
 
 const saveBuyer = (b: GroupBuyer) => actions.saveGroupBuyer(b);
 
@@ -25,7 +26,7 @@ export default function GroupBuyersPage() {
   const [s, set] = usePersistentState("chou-partner:group-buyers-page", DEFAULTS);
   const { tab, view, city, kind, fruitOnly, kw } = s;
 
-  const inTab = (st: AgencyStatus) => groupBuyers.filter((b) => agencyStatus(b) === st);
+  const inTab = (st: Tab) => (st === "全部" ? groupBuyers : groupBuyers.filter((b) => agencyStatus(b) === st));
   const cities: string[] = COUNTIES.filter((c) => inTab(tab).some((b) => agencyCity(b) === c));
   const list = inTab(tab).filter(
     (b) =>
@@ -37,7 +38,8 @@ export default function GroupBuyersPage() {
         .join(" ")
         .includes(kw.trim()),
   );
-  // 有水果團購的排前面
+  // 全部：依配合中、洽談中、待聯絡、無意願排；待聯絡：有水果團購的排前面
+  if (tab === "全部") list.sort((x, y) => AGENCY_STATUSES.indexOf(agencyStatus(x)) - AGENCY_STATUSES.indexOf(agencyStatus(y)));
   if (tab === "待聯絡") list.sort((x, y) => Number(!!y.fruitDeal) - Number(!!x.fruitDeal));
   const filtering = !!(city || kind || fruitOnly || kw.trim());
 
@@ -45,17 +47,14 @@ export default function GroupBuyersPage() {
     <div>
       <PageHeader
         title="團購管理"
-        subtitle="管理團購業者與他們開的團；待聯絡名單聯絡完成後可轉為配合中"
+        subtitle="管理團購業者與他們開的團；待聯絡名單聯絡後可轉為洽談中、配合中或無意願"
         actions={<LinkButton href="/group-buys/buyers/new">＋ 新增團購業者</LinkButton>}
       />
 
       <Tabs
         value={tab}
         onChange={(v) => set({ tab: v })}
-        tabs={[
-          { value: "配合中", label: "配合中", count: inTab("配合中").length },
-          { value: "待聯絡", label: "待聯絡", count: inTab("待聯絡").length },
-        ]}
+        tabs={(["全部", ...AGENCY_STATUSES] as Tab[]).map((t) => ({ value: t, label: t, count: inTab(t).length }))}
       />
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
@@ -122,11 +121,11 @@ export default function GroupBuyersPage() {
       {list.length === 0 ? (
         <Empty>{groupBuyers.length ? "沒有符合的團購業者" : "尚未建立團購業者"}</Empty>
       ) : view === "list" ? (
-        <BuyerTable list={list} groupBuys={groupBuys} pending={tab === "待聯絡"} canEdit={canEdit} />
+        <BuyerTable list={list} groupBuys={groupBuys} tab={tab} canEdit={canEdit} />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
           {list.map((b) => (
-            <BuyerCard key={b.id} b={b} groupBuys={groupBuys} canEdit={canEdit} />
+            <BuyerCard key={b.id} b={b} groupBuys={groupBuys} canEdit={canEdit} showStatus={tab === "全部"} />
           ))}
         </div>
       )}
@@ -136,17 +135,19 @@ export default function GroupBuyersPage() {
 
 const contactLine = (b: GroupBuyer) => [b.phone, ...(b.otherPhones ?? [])].filter(Boolean).join("・");
 
-function BuyerCard({ b, groupBuys, canEdit }: { b: GroupBuyer; groupBuys: GroupBuy[]; canEdit: boolean }) {
+function BuyerCard({ b, groupBuys, canEdit, showStatus }: { b: GroupBuyer; groupBuys: GroupBuy[]; canEdit: boolean; showStatus: boolean }) {
   const gs = groupBuys.filter((g) => g.buyerId === b.id);
-  const pending = agencyStatus(b) === "待聯絡";
+  // 洽談中、待聯絡、無意願都還不是合作對象：顯示水果團購與狀態按鈕
+  const pending = agencyStatus(b) !== "配合中";
   const link = b.website || b.links?.[0];
   return (
     <Link href={`/group-buys/buyers/${b.id}`}>
-      <Card className="flex h-full flex-col transition hover:border-brand-300 hover:shadow">
+      <Card className={cn("flex h-full flex-col transition hover:border-brand-300 hover:shadow", agencyStatus(b) === "無意願" && "opacity-75")}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="text-lg font-semibold text-slate-800">{b.name}</div>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+              {showStatus && <AgencyStatusBadge agency={b} />}
               <KindBadge kind={b.kind} />
               {agencyCity(b) && <span className="text-xs text-slate-500">{agencyCity(b)}</span>}
             </div>
@@ -165,7 +166,11 @@ function BuyerCard({ b, groupBuys, canEdit }: { b: GroupBuyer; groupBuys: GroupB
         {pending ? (
           <>
             {b.fruitDeal && <p className="mt-3 line-clamp-2 text-sm text-accent-600">{b.fruitDeal}</p>}
-            {canEdit && <AgencyStatusButton agency={b} onSave={saveBuyer} className="mt-4 self-start" />}
+            {canEdit && (
+              <div className="mt-4">
+                <AgencyStatusButton agency={b} onSave={saveBuyer} allowDecline />
+              </div>
+            )}
           </>
         ) : (
           <div className="mt-4 text-sm text-slate-600">累計團購金額 {money(gs.reduce((sum, g) => sum + groupBuyTotal(g), 0))}</div>
@@ -176,26 +181,35 @@ function BuyerCard({ b, groupBuys, canEdit }: { b: GroupBuyer; groupBuys: GroupB
 }
 
 /** 清單：一列一家，點整列進總覽 */
-function BuyerTable({ list, groupBuys, pending, canEdit }: { list: GroupBuyer[]; groupBuys: GroupBuy[]; pending: boolean; canEdit: boolean }) {
+function BuyerTable({ list, groupBuys, tab, canEdit }: { list: GroupBuyer[]; groupBuys: GroupBuy[]; tab: Tab; canEdit: boolean }) {
   const router = useRouter();
+  // 配合中看團購次數與金額；其他分頁（含全部）看水果團購與狀態按鈕
+  const pending = tab !== "配合中";
+  // 類型與縣市合成一欄，讓狀態按鈕放得下
+  const head = ["團購業者", ...(tab === "全部" ? ["狀態"] : []), "類型／縣市", "聯絡方式", pending ? "水果團購" : "團購", ""];
   return (
-    <Table head={["團購業者", "類型", "縣市", "聯絡方式", pending ? "水果團購" : "團購", ""]}>
+    <Table head={head}>
       {list.map((b) => {
         const gs = groupBuys.filter((g) => g.buyerId === b.id);
         const link = b.website || b.links?.[0];
         return (
-          <tr key={b.id} onClick={() => router.push(`/group-buys/buyers/${b.id}`)} className="cursor-pointer hover:bg-slate-50">
+          <tr key={b.id} onClick={() => router.push(`/group-buys/buyers/${b.id}`)} className="cursor-pointer transition-colors hover:bg-brand-100">
             <Td>
               <Link href={`/group-buys/buyers/${b.id}`} className="font-medium text-slate-800 hover:text-brand-700">
                 {b.name}
               </Link>
               {b.contactName && <div className="text-xs text-slate-500">{b.contactName}</div>}
             </Td>
+            {tab === "全部" && (
+              <Td>
+                <AgencyStatusBadge agency={b} />
+              </Td>
+            )}
             <Td>
               <KindBadge kind={b.kind} />
+              {agencyCity(b) && <div className="mt-1 whitespace-nowrap text-xs text-slate-500">{agencyCity(b)}</div>}
             </Td>
-            <Td className="whitespace-nowrap text-slate-600">{agencyCity(b) || "-"}</Td>
-            <Td className="max-w-xs text-slate-700">
+            <Td className="max-w-[12rem] text-slate-700">
               {[b.phone, ...(b.otherPhones ?? [])].filter(Boolean).map((p) => (
                 <div key={p} className="whitespace-nowrap">
                   {p}
@@ -204,12 +218,12 @@ function BuyerTable({ list, groupBuys, pending, canEdit }: { list: GroupBuyer[];
               {link && <div className="truncate text-xs text-brand-700">{shortLink(link)}</div>}
             </Td>
             {pending ? (
-              <Td className="max-w-md">
+              <Td className="whitespace-nowrap">
+                {/* 欄位多、空間小：只放標籤，說明放在滑鼠提示 */}
                 {b.fruitDeal ? (
-                  <div className="flex items-start gap-2">
-                    <FruitTourBadge className="shrink-0" label="有水果團購" />
-                    <span className="line-clamp-2 text-xs text-accent-600">{b.fruitDeal}</span>
-                  </div>
+                  <span title={b.fruitDeal} className="cursor-help">
+                    <FruitTourBadge label="有水果團購" />
+                  </span>
                 ) : (
                   <span className="text-slate-300">-</span>
                 )}
@@ -220,7 +234,7 @@ function BuyerTable({ list, groupBuys, pending, canEdit }: { list: GroupBuyer[];
               </Td>
             )}
             <Td className="whitespace-nowrap text-right">
-              {pending && canEdit && <AgencyStatusButton agency={b} onSave={saveBuyer} className="px-2.5 py-1.5 text-xs" />}
+              {pending && canEdit && <AgencyStatusButton agency={b} onSave={saveBuyer} allowDecline compact />}
             </Td>
           </tr>
         );
