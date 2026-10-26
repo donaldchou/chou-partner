@@ -57,14 +57,14 @@ const NAV = [
     group: "遊覽車管理",
     items: [
       { href: "/tours/bookings", label: "採果預約", icon: CalendarClock },
-      { href: "/tours/agencies", label: "旅行社資料", icon: Bus },
+      { href: "/tours/agencies", label: "旅行社管理", icon: Bus },
     ],
   },
   {
     group: "團購管理",
     items: [
       { href: "/group-buys", label: "團購列表", icon: ListOrdered },
-      { href: "/group-buys/new", label: "新增團購", icon: PackagePlus, admin: true },
+      { href: "/group-buys/new", label: "團購管理", icon: PackagePlus, admin: true },
     ],
   },
 ];

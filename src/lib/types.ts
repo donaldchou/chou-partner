@@ -191,6 +191,17 @@ export interface Person {
   photos: string[];
 }
 
+/** 旅行社的採果方案；group 用來分群組顯示 */
+export interface AgencyPlan {
+  id: string;
+  group?: string;
+  name: string;
+  content?: string;
+  photos: string[];
+  /** 員工參考卡要顯示的照片（photos 其中一張）；空白＝用第一張 */
+  cardPhoto?: string;
+}
+
 export interface Agency {
   id: string;
   name: string;
@@ -198,10 +209,13 @@ export interface Agency {
   phone: string;
   address?: string;
   lineName?: string;
+  /** 名片照片（可多張）；cardImage 是其中選來辨識的那張 */
+  cardImages?: string[];
   cardImage?: string;
   note?: string;
   createdAt: string;
   people: Person[];
+  plans?: AgencyPlan[];
 }
 
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
@@ -214,6 +228,7 @@ export interface Booking {
   headcount: number;
   leaderId?: string;
   driverId?: string;
+  planId?: string;
   plate: string;
   county: string;
   buyingPower: BuyingPower;

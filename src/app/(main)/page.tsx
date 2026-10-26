@@ -165,7 +165,7 @@ export default function Dashboard() {
                       <div>
                         <div className="font-medium text-slate-800">{agency?.name ?? "（未知旅行社）"}</div>
                         <div className="text-xs text-slate-500">
-                          {formatDateTime(b.datetime)}（{weekday(b.datetime)}）・領隊 {leader?.name ?? "-"}・{b.plate}
+                          {formatDateTime(b.datetime)}（{weekday(b.datetime)}）・領隊 {leader?.name ?? "-"}{b.plate && `・${b.plate}`}
                         </div>
                       </div>
                       <div className="text-right">

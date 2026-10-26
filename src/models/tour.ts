@@ -15,6 +15,19 @@ const PersonSchema = new Schema(
   sub,
 );
 
+/** 旅行社的採果方案 */
+const PlanSchema = new Schema(
+  {
+    id: idField,
+    group: str,
+    name: required("方案名稱"),
+    content: str,
+    photos,
+    cardPhoto: str, // 員工參考卡用的照片（photos 其中一張）
+  },
+  sub,
+);
+
 const AgencySchema = new Schema({
   _id: idField,
   name: required("旅行社名稱"),
@@ -22,16 +35,19 @@ const AgencySchema = new Schema({
   phone: required("電話"),
   address: str,
   lineName: str,
+  /** 名片照片（可多張）；cardImage 是其中選來辨識的那張 */
+  cardImages: photos,
   cardImage: fileUrl,
   note: str,
   createdAt: ymd,
   people: { type: [PersonSchema], default: [] },
+  plans: { type: [PlanSchema], default: [] },
 });
 AgencySchema.index({ name: 1 });
 
 export const AgencyModel = defineModel("Agency", AgencySchema, "agencies");
 
-/** 遊覽車採果預約；領隊、司機引用旅行社底下 people 的 id */
+/** 遊覽車採果預約；領隊、司機引用旅行社底下 people 的 id，方案引用 plans 的 id */
 const BookingSchema = new Schema({
   _id: idField,
   agencyId: { type: String, ref: "Agency", required: [true, "請選擇旅行社"] as [true, string], index: true },
@@ -39,8 +55,9 @@ const BookingSchema = new Schema({
   headcount: { type: Number, required: [true, "請填寫總人數"] as [true, string], min: [1, "總人數至少 1 人"] as [number, string] },
   leaderId: str,
   driverId: str,
-  plate: { ...required("車牌號碼"), uppercase: true },
-  county: { type: String, enum: COUNTIES, required: [true, "請選擇客戶居住縣市"] as [true, string] },
+  planId: str,
+  plate: { ...str, uppercase: true },
+  county: { type: String, enum: ["", ...COUNTIES], default: "" },
   buyingPower: { type: String, enum: BUYING_POWERS, default: "中" },
   buyingPowerNote: str,
   status: { type: String, enum: BOOKING_STATUSES, default: "已預約", index: true },

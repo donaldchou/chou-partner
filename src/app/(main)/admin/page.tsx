@@ -308,7 +308,7 @@ function PasswordModal({ user, onClose, onSave }: { user: User; onClose: () => v
 type HostFile = { url: string; size: number; time: string; used: boolean; recent: boolean };
 type FileScan = { total: number; totalBytes: number; used: number; unused: HostFile[] };
 
-const FOLDERS: Record<string, string> = { cards: "名片", people: "領隊／司機照片", shipping: "宅配單" };
+const FOLDERS: Record<string, string> = { cards: "名片", people: "領隊／司機照片", plans: "採果方案照片", shipping: "宅配單" };
 
 const fmtSize = (n: number) =>
   n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;

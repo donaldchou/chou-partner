@@ -44,6 +44,23 @@ body {
   font-family: var(--font-sans);
 }
 
+/* 員工參考卡列印：只印出 <PrintArea> 放在 body 底下的副本（Modal 是 fixed，直接印會每頁重複） */
+.print-portal {
+  display: none;
+}
+@media print {
+  body:has(> .print-portal) > *:not(.print-portal) {
+    display: none !important;
+  }
+  .print-portal,
+  .print-portal * {
+    visibility: visible;
+  }
+  .print-portal {
+    display: block;
+  }
+}
+
 /* 列印時只印出 .print-area（宅配單） */
 @media print {
   body * {

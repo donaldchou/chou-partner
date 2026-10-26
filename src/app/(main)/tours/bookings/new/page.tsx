@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import BookingForm from "@/components/BookingForm";
 import { Loading, PageHeader } from "@/components/ui";
 import { actions } from "@/lib/store";
-import { uid } from "@/lib/utils";
+import { today, uid } from "@/lib/utils";
 
 function NewBooking() {
   const router = useRouter();
@@ -15,7 +15,8 @@ function NewBooking() {
       initial={{
         id: uid("b"),
         agencyId,
-        datetime: "",
+        // 預設今天上午 08:00，通常只需改日期
+        datetime: `${today()}T08:00`,
         headcount: 0,
         plate: "",
         county: "",

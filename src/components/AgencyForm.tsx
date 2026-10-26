@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Agency } from "@/lib/types";
-import BusinessCardCapture from "./BusinessCardCapture";
+import { BusinessCardMultiCapture } from "./BusinessCardCapture";
 import { Button, Card, Field, Input, Textarea } from "./ui";
 
 export default function AgencyForm({
@@ -16,6 +16,8 @@ export default function AgencyForm({
 }) {
   const [a, setA] = useState(initial);
   const set = <K extends keyof Agency>(k: K, v: Agency[K]) => setA((p) => ({ ...p, [k]: v }));
+  // 舊資料只有一張 cardImage
+  const cardImages = a.cardImages?.length ? a.cardImages : a.cardImage ? [a.cardImage] : [];
 
   return (
     <form
@@ -27,9 +29,10 @@ export default function AgencyForm({
     >
       {/* 寬螢幕：名片在左、欄位在右 */}
       <div className="grid gap-5 lg:grid-cols-[minmax(300px,380px)_1fr] lg:items-start">
-        <BusinessCardCapture
-          image={a.cardImage}
-          onImage={(img) => set("cardImage", img)}
+        <BusinessCardMultiCapture
+          images={cardImages}
+          selected={a.cardImage}
+          onChange={(imgs, sel) => setA((p) => ({ ...p, cardImages: imgs, cardImage: sel ?? "" }))}
           onRecognized={(r) =>
             setA((p) => ({ ...p, name: r.company, contactName: r.name, phone: r.phone, address: r.address, lineName: r.lineName }))
           }

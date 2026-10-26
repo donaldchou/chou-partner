@@ -70,7 +70,7 @@ export async function deleteFiles(urls: Iterable<string>) {
 /** 存檔案網址的欄位（新增有檔案的欄位時一定要加在這裡，否則檔案會被當成沒用到而刪掉） */
 const FILE_FIELDS = [
   { model: CustomerModel, paths: ["cardImage"] },
-  { model: AgencyModel, paths: ["cardImage", "people.photos"] },
+  { model: AgencyModel, paths: ["cardImage", "cardImages", "people.photos", "plans.photos"] },
   { model: GroupBuyModel, paths: ["cardImage", "backups.fileUrl"] },
   { model: OrderModel, paths: ["shipments.packages.labelUrl", "payment.reports.photoUrl"] },
   // 已刪除紀錄裡的訂單還可以還原，檔案也要保留

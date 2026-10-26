@@ -5,7 +5,7 @@ import { HttpError, fromClient, toClient } from "./api";
 import { COLLECTIONS, DATE_FIELD, FILTERS, SEARCH_FIELDS, SORT, type CollectionName } from "./collections";
 import { assertNoInlineFiles, collectFileUrls, deleteFiles, deleteRemovedFiles } from "./storage";
 import { connectDB } from "./mongodb";
-import type { AppState, Person } from "./types";
+import type { AgencyPlan, AppState, Person } from "./types";
 import { uid } from "./utils";
 
 type Data = Record<string, unknown>;
@@ -71,9 +71,9 @@ export async function getDoc(name: CollectionName, id: string) {
 
 /* ---------------- 各集合的寫入規則 ---------------- */
 
-/** 預約：旅行社要存在，領隊／司機要是這家旅行社登錄的人 */
+/** 預約：旅行社要存在，領隊／司機要是這家旅行社登錄的人，方案要是這家旅行社的方案 */
 async function checkBooking(data: Data) {
-  const agency = (await AgencyModel.findById(data.agencyId).lean()) as { people?: Person[] } | null;
+  const agency = (await AgencyModel.findById(data.agencyId).lean()) as { people?: Person[]; plans?: AgencyPlan[] } | null;
   if (!agency) throw new HttpError(400, `找不到旅行社（${String(data.agencyId)}）`);
   const people = agency.people ?? [];
   for (const [field, role] of [
@@ -85,14 +85,19 @@ async function checkBooking(data: Data) {
       throw new HttpError(400, `這家旅行社沒有這位${role}（${String(pid)}）`);
     }
   }
+  if (data.planId && !(agency.plans ?? []).some((p) => p.id === data.planId)) {
+    throw new HttpError(400, `這家旅行社沒有這個採果方案（${String(data.planId)}）`);
+  }
 }
 
-/** 旅行社更新後：已移除的領隊／司機，從預約裡清掉 */
-async function syncBookingPeople(agencyId: string, data: Data) {
+/** 旅行社更新後：已移除的領隊／司機／方案，從預約裡清掉 */
+async function syncBookingRefs(agencyId: string, data: Data) {
   const people = (data.people as Person[] | undefined) ?? [];
+  const plans = (data.plans as AgencyPlan[] | undefined) ?? [];
   const ids = (role: string) => people.filter((p) => p.role === role).map((p) => p.id);
   await BookingModel.updateMany({ agencyId, leaderId: { $nin: ["", ...ids("領隊")] } }, { $set: { leaderId: "" } });
   await BookingModel.updateMany({ agencyId, driverId: { $nin: ["", ...ids("司機")] } }, { $set: { driverId: "" } });
+  await BookingModel.updateMany({ agencyId, planId: { $nin: ["", ...plans.map((p) => p.id)] } }, { $set: { planId: "" } });
 }
 
 /** 標籤選項：名稱不可重複；「回購客」由系統依訂單自動標記，不能手動管理 */
@@ -119,7 +124,7 @@ async function beforeWrite(name: CollectionName, id: string, data: Data) {
 }
 
 async function afterWrite(name: CollectionName, id: string, data: Data, before: Data | null = null) {
-  if (name === "agencies") await syncBookingPeople(id, data);
+  if (name === "agencies") await syncBookingRefs(id, data);
   if (name === "customerTags") await renameCustomerTag(before, data);
 }
 

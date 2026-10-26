@@ -7,6 +7,7 @@ import type { Booking, BookingStatus, BuyingPower, Person, PersonRole } from "@/
 import { cn, COUNTIES } from "@/lib/utils";
 import PersonModal from "./PersonModal";
 import { PhotoStrip } from "./PhotoUploader";
+import { groupPlans } from "./PlanSection";
 import { Button, Card, Field, Input, Select, SectionTitle, Textarea } from "./ui";
 
 const POWER: { v: BuyingPower; desc: string }[] = [
@@ -36,6 +37,8 @@ export default function BookingForm({
   const drivers = agency?.people.filter((p) => p.role === "司機") ?? [];
   const leader = leaders.find((p) => p.id === b.leaderId);
   const driver = drivers.find((p) => p.id === b.driverId);
+  const plans = agency?.plans ?? [];
+  const plan = plans.find((p) => p.id === b.planId);
 
   function addPerson(p: Person) {
     if (!agency) return;
@@ -61,7 +64,9 @@ export default function BookingForm({
                 <Select
                   required
                   value={b.agencyId}
-                  onChange={(e) => setB((p) => ({ ...p, agencyId: e.target.value, leaderId: undefined, driverId: undefined }))}
+                  onChange={(e) =>
+                    setB((p) => ({ ...p, agencyId: e.target.value, leaderId: undefined, driverId: undefined, planId: undefined }))
+                  }
                 >
                   <option value="">請選擇旅行社</option>
                   {agencies.map((a) => (
@@ -106,18 +111,44 @@ export default function BookingForm({
             onChange={(id) => set("driverId", id)}
             onAdd={() => setAdding("司機")}
           >
-            <Field label="車牌號碼" required className="mt-4">
-              <Input required placeholder="例：KAA-1234" value={b.plate} onChange={(e) => set("plate", e.target.value.toUpperCase())} />
+            <Field label="車牌號碼" className="mt-4">
+              <Input placeholder="例：KAA-1234" value={b.plate} onChange={(e) => set("plate", e.target.value.toUpperCase())} />
             </Field>
           </PersonPicker>
         </div>
 
         <Card>
+          <SectionTitle>採果方案</SectionTitle>
+          <Select disabled={!agency} value={b.planId ?? ""} onChange={(e) => set("planId", e.target.value || undefined)}>
+            <option value="">{!agency ? "請先選擇旅行社" : plans.length ? "未選方案" : "這家旅行社尚未建立方案"}</option>
+            {groupPlans(plans).map(([group, list]) => (
+              <optgroup key={group} label={group || "未分群組"}>
+                {list.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </Select>
+          {plan && (
+            <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3 text-sm">
+              <div className="font-medium text-slate-800">
+                {plan.group && <span className="mr-2 text-xs text-brand-700">{plan.group}</span>}
+                {plan.name}
+              </div>
+              {plan.content && <div className="whitespace-pre-line text-slate-600">{plan.content}</div>}
+              <PhotoStrip photos={plan.photos} />
+            </div>
+          )}
+        </Card>
+
+        <Card>
           <SectionTitle>客群資訊</SectionTitle>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="客戶居住縣市" required>
-              <Select required value={b.county} onChange={(e) => set("county", e.target.value)}>
-                <option value="">請選擇</option>
+            <Field label="客戶居住縣市">
+              <Select value={b.county} onChange={(e) => set("county", e.target.value)}>
+                <option value="">未填寫</option>
                 {COUNTIES.map((c) => (
                   <option key={c}>{c}</option>
                 ))}

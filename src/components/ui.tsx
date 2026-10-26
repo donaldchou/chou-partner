@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ArrowLeft, ChevronLeft, ChevronRight, FileImage, X } from "lucide-react";
 import { useCanEdit } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { UnlockTimer } from "./unlock";
@@ -63,6 +64,49 @@ export function SectionTitle({ children, right }: { children: React.ReactNode; r
       <h2 className="text-base font-semibold text-slate-800">{children}</h2>
       {right}
     </div>
+  );
+}
+
+/**
+ * 要列印的區塊（例如員工參考卡）。畫面上照常顯示；另外在 body 底下放一份副本，
+ * 列印時只印這份副本——如果直接印 Modal 裡的內容，fixed 定位會讓它在每一頁重複出現。
+ */
+export function PrintArea({ className = "", children, ref }: { className?: string; children: React.ReactNode; ref?: React.Ref<HTMLDivElement> }) {
+  return (
+    <>
+      <div ref={ref} className={className}>
+        {children}
+      </div>
+      {typeof document !== "undefined" && createPortal(<div className={`print-portal ${className}`}>{children}</div>, document.body)}
+    </>
+  );
+}
+
+/** 把 target 指到的區塊（例如 PrintArea）存成 JPG 下載，方便直接用 LINE 傳圖片 */
+export function SaveJpgButton({ target, filename }: { target: React.RefObject<HTMLDivElement | null>; filename: string }) {
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (!target.current) return;
+    setBusy(true);
+    try {
+      const { toJpeg } = await import("html-to-image");
+      // pixelRatio 2：手機上放大看也清楚
+      // includeQueryParams：照片網址都是 /api/photo?url=…，預設會忽略 ? 後面當快取鍵，每張照片變成同一張
+      const url = await toJpeg(target.current, { quality: 0.92, pixelRatio: 2, backgroundColor: "#ffffff", includeQueryParams: true });
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${filename}.jpg`;
+      a.click();
+    } catch (e) {
+      alert(`存成 JPG 失敗：${e instanceof Error ? e.message : e}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Button onClick={save} disabled={busy}>
+      <FileImage size={16} /> {busy ? "產生中…" : "存成 JPG"}
+    </Button>
   );
 }
 

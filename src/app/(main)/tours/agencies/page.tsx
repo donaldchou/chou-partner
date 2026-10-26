@@ -18,7 +18,7 @@ export default function AgenciesPage() {
   return (
     <div>
       <PageHeader
-        title="旅行社資料"
+        title="旅行社管理"
         subtitle="管理合作旅行社與其領隊、司機"
         actions={<LinkButton href="/tours/agencies/new">＋ 新增旅行社</LinkButton>}
       />

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import AgencyForm from "@/components/AgencyForm";
 import PeopleSection from "@/components/PeopleSection";
+import PlanSection from "@/components/PlanSection";
 import { BookingStatusBadge } from "@/components/BookingBadges";
 import { Button, Card, Empty, LinkButton, Loading, NotFound, PageHeader, SectionTitle } from "@/components/ui";
 import { actions, useAppState, useLoaded } from "@/lib/store";
@@ -39,21 +40,16 @@ export default function AgencyDetailPage() {
 
   const bs = bookings.filter((b) => b.agencyId === a.id).sort((x, y) => y.datetime.localeCompare(x.datetime));
   const visited = bs.filter((b) => b.status === "已到場");
+  // 主要名片（辨識用的那張）排第一
+  const cards = [...new Set([a.cardImage, ...(a.cardImages ?? [])].filter((u): u is string => !!u))];
 
   return (
     <div>
       <PageHeader
-        title={a.name}
+        title={`${a.name}-總覽`}
         subtitle={[a.contactName, a.phone, a.lineName && `LINE：${a.lineName}`].filter(Boolean).join("・")}
         back="/tours/agencies"
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setEditing(true)}>
-              編輯資料
-            </Button>
-            <LinkButton href={`/tours/bookings/new?agency=${a.id}`}>＋ 新增採果預約</LinkButton>
-          </>
-        }
+        actions={<LinkButton href={`/tours/bookings/new?agency=${a.id}`}>＋ 新增採果預約</LinkButton>}
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -64,7 +60,15 @@ export default function AgencyDetailPage() {
 
         <div className="space-y-6">
           <Card>
-            <SectionTitle>旅行社資訊</SectionTitle>
+            <SectionTitle
+              right={
+                <Button variant="secondary" onClick={() => setEditing(true)}>
+                  編輯資料
+                </Button>
+              }
+            >
+              旅行社資訊
+            </SectionTitle>
             <dl className="grid grid-cols-[4rem_1fr] gap-y-2 text-sm">
               <dt className="text-slate-400">地址</dt>
               <dd className="text-slate-700">{a.address || "-"}</dd>
@@ -76,11 +80,19 @@ export default function AgencyDetailPage() {
                 {money(visited.reduce((s, b) => s + (b.revenue ?? 0), 0))}
               </dd>
             </dl>
-            {a.cardImage && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={photoSrc(a.cardImage)} alt="名片" className="mt-4 max-h-48 rounded-lg border border-slate-200" />
+            {cards.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {cards.map((u) => (
+                  <a key={u} href={photoSrc(u)} target="_blank" rel="noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photoSrc(u)} alt="名片" className="max-h-48 rounded-lg border border-slate-200" />
+                  </a>
+                ))}
+              </div>
             )}
           </Card>
+
+          <PlanSection plans={a.plans ?? []} onChange={(plans) => actions.saveAgency({ ...a, plans })} />
 
           <Card>
             <SectionTitle>採果預約紀錄</SectionTitle>
@@ -95,7 +107,7 @@ export default function AgencyDetailPage() {
                       className="flex items-center justify-between gap-2 py-2.5 text-sm hover:bg-slate-50"
                     >
                       <span>
-                        {formatDateTime(b.datetime)}・{b.headcount} 人・{b.county}
+                        {formatDateTime(b.datetime)}・{b.headcount} 人{b.county && `・${b.county}`}
                       </span>
                       <BookingStatusBadge status={b.status} />
                     </Link>

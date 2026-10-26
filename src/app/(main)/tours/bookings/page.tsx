@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Pencil, Share2, Trash2 } from "lucide-react";
 import { BookingStatusBadge, BuyingPowerBadge } from "@/components/BookingBadges";
-import { Card, Empty, LinkButton, PageHeader, Tabs } from "@/components/ui";
-import { useAppState } from "@/lib/store";
+import BookingReferenceCard from "@/components/BookingReferenceCard";
+import { PhotoStrip } from "@/components/PhotoUploader";
+import { Button, Card, Empty, LinkButton, PageHeader, Tabs } from "@/components/ui";
+import { actions, useAppState, useCanEdit } from "@/lib/store";
 import type { Booking } from "@/lib/types";
 import { formatDate, today, weekday } from "@/lib/utils";
 
@@ -13,6 +17,9 @@ type Filter = "upcoming" | "past" | "cancelled" | "all";
 export default function BookingsPage() {
   const { bookings, agencies } = useAppState();
   const [filter, setFilter] = useState<Filter>("upcoming");
+  const [card, setCard] = useState<Booking | null>(null);
+  const canEdit = useCanEdit();
+  const router = useRouter();
   const now = today();
 
   const groups: Record<Filter, Booking[]> = {
@@ -67,9 +74,13 @@ export default function BookingsPage() {
                   const a = agencies.find((x) => x.id === b.agencyId);
                   const leader = a?.people.find((p) => p.id === b.leaderId);
                   const driver = a?.people.find((p) => p.id === b.driverId);
+                  const plan = a?.plans?.find((p) => p.id === b.planId);
                   return (
-                    <Link key={b.id} href={`/tours/bookings/${b.id}`}>
-                      <Card className="grid gap-3 p-4 transition hover:border-brand-300 sm:grid-cols-[80px_1fr_auto] sm:items-center">
+                    <Card key={b.id} className="flex items-stretch p-0 transition hover:border-brand-300">
+                      <Link
+                        href={`/tours/bookings/${b.id}`}
+                        className="grid min-w-0 flex-1 gap-3 p-4 sm:grid-cols-[80px_1fr_auto] sm:items-center"
+                      >
                         <div className="text-2xl font-bold text-brand-800">{b.datetime.slice(11, 16)}</div>
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
@@ -78,19 +89,55 @@ export default function BookingsPage() {
                             <BuyingPowerBadge level={b.buyingPower} />
                           </div>
                           <div className="mt-1 text-sm text-slate-500">
-                            領隊 {leader ? `${leader.name} ${leader.phone}` : "-"}・司機 {driver?.name ?? "-"}・車牌 {b.plate}
+                            領隊 {leader ? `${leader.name} ${leader.phone}` : "-"}・司機 {driver?.name ?? "-"}・車牌 {b.plate || "-"}
                           </div>
                           <div className="text-sm text-slate-500">
-                            客群來自 {b.county}
+                            客群來自 {b.county || "-"}
                             {b.buyingPowerNote && `・${b.buyingPowerNote}`}
                           </div>
+                          {plan && (
+                            <div className="mt-2 flex items-start gap-3 rounded-lg bg-slate-50 p-2.5 text-sm">
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <div className="font-medium text-slate-700">
+                                  🍊 {plan.group && <span className="text-brand-700">{plan.group}・</span>}
+                                  {plan.name}
+                                </div>
+                                {plan.content && <div className="whitespace-pre-line text-slate-600">{plan.content}</div>}
+                              </div>
+                              {plan.photos.length > 0 && (
+                                <div className="shrink-0">
+                                  <PhotoStrip photos={plan.photos} max={3} size="h-16 w-16 sm:h-24 sm:w-24" />
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <div className="text-right">
                           <div className="text-xl font-semibold text-slate-800">{b.headcount}</div>
                           <div className="text-xs text-slate-400">人</div>
                         </div>
-                      </Card>
-                    </Link>
+                      </Link>
+                      <div className="flex flex-col items-center justify-center gap-0.5 border-l border-slate-100 px-1 sm:flex-row sm:px-2">
+                        <Button variant="ghost" className="px-2.5 text-brand-700" onClick={() => setCard(b)} title="員工參考卡">
+                          <Share2 size={16} />
+                        </Button>
+                        {canEdit && (
+                          <>
+                            <Button variant="ghost" className="px-2.5" onClick={() => router.push(`/tours/bookings/${b.id}`)} title="編輯">
+                              <Pencil size={16} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              className="px-2.5 text-red-600"
+                              title="刪除"
+                              onClick={() => confirm(`刪除 ${formatDate(date)} ${a?.name ?? ""} 的預約？`) && actions.deleteBooking(b.id)}
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </Card>
                   );
                 })}
               </div>
@@ -98,6 +145,7 @@ export default function BookingsPage() {
           ))}
         </div>
       )}
+      {card && <BookingReferenceCard booking={card} onClose={() => setCard(null)} />}
     </div>
   );
 }
