@@ -29,6 +29,8 @@ export const BOOKING_STATUSES = ["已預約", "已到場", "已取消"] as const
 export const BUYING_POWERS = ["高", "中", "低"] as const;
 export const SHIPPING_MODES = ["provided", "generate"] as const;
 export const GROUP_BUY_STATUSES = ["洽談中", "進行中", "已出貨", "已結案"] as const;
+/** 團購業者類型 */
+export const GROUP_BUYER_KINDS = ["團購平台", "社群團購主", "電商／網購", "企業福委／機關團購", "實體通路", "其他"] as const;
 export const BACKUP_KINDS = ["業者提供", "系統產生"] as const;
 
 export const COUNTIES = [

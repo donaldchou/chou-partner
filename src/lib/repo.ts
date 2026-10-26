@@ -1,5 +1,6 @@
 import { CustomerModel } from "@/models/customer";
 import { CustomerTagModel } from "@/models/customer-tag";
+import { GroupBuyerModel, GroupBuyModel } from "@/models/group-buy";
 import { AgencyModel, BookingModel, BusCompanyModel } from "@/models/tour";
 import { HttpError, fromClient, toClient } from "./api";
 import { COLLECTIONS, DATE_FIELD, FILTERS, SEARCH_FIELDS, SORT, type CollectionName } from "./collections";
@@ -139,6 +140,9 @@ async function renameCustomerTag(before: Data | null, data: Data) {
 async function beforeWrite(name: CollectionName, id: string, data: Data) {
   assertNoInlineFiles(data);
   if (name === "bookings") await checkBooking(data);
+  if (name === "groupBuys" && data.buyerId && !(await GroupBuyerModel.exists({ _id: data.buyerId }))) {
+    throw new HttpError(400, `找不到團購業者（${String(data.buyerId)}）`);
+  }
   if (name === "customerTags") await checkCustomerTag(id, data);
 }
 
@@ -198,6 +202,9 @@ export async function deleteDoc(name: CollectionName, id: string, cascade: boole
   }
 
   await Model.deleteOne({ _id: id });
+
+  // 團購業者刪掉不影響團購：只清掉團購上的業者
+  if (name === "groupBuyers") await GroupBuyModel.updateMany({ buyerId: id }, { $set: { buyerId: "" } });
 
   // 遊覽車公司刪掉不影響預約：只清掉預約上的公司，以及只屬於這家公司的司機
   if (name === "busCompanies") {

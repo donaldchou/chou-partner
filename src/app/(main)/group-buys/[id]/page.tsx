@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import GroupBuyForm from "@/components/GroupBuyForm";
@@ -17,7 +18,9 @@ export default function GroupBuyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const loaded = useLoaded();
-  const g = useAppState().groupBuys.find((x) => x.id === id);
+  const { groupBuys, groupBuyers } = useAppState();
+  const g = groupBuys.find((x) => x.id === id);
+  const buyer = groupBuyers.find((b) => b.id === g?.buyerId);
   const [tab, setTab] = useState<Tab>("items");
 
   if (!loaded) return <Loading />;
@@ -27,7 +30,17 @@ export default function GroupBuyDetailPage() {
     <div>
       <PageHeader
         title={g.name}
-        back="/group-buys"
+        back={buyer ? `/group-buys/buyers/${buyer.id}` : "/group-buys"}
+        info={
+          buyer && (
+            <Link
+              href={`/group-buys/buyers/${buyer.id}`}
+              className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 ring-1 ring-inset ring-violet-600/20 hover:bg-violet-100"
+            >
+              團購業者：{buyer.name}
+            </Link>
+          )
+        }
         subtitle={`${g.contactName}・${g.phone}${g.lineName ? `・LINE ${g.lineName}` : ""}・${formatDate(g.startDate)} ~ ${formatDate(g.endDate)}`}
         actions={
           <Button

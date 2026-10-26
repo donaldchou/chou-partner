@@ -1,6 +1,6 @@
 import type { Model } from "mongoose";
 import { CustomerModel } from "@/models/customer";
-import { GroupBuyModel } from "@/models/group-buy";
+import { GroupBuyerModel, GroupBuyModel } from "@/models/group-buy";
 import { OrderModel } from "@/models/order";
 import { ProductModel } from "@/models/product";
 import { AgencyModel, BookingModel, BusCompanyModel } from "@/models/tour";
@@ -90,6 +90,13 @@ const ADMIN_COLLECTIONS: Record<
     sort: { startDate: -1 },
     row: (d) => ({ title: s(d.name), sub: `${s(d.contactName)}・${s(d.status)}`, date: s(d.startDate) }),
   },
+  groupBuyers: {
+    label: "團購業者",
+    model: GroupBuyerModel,
+    search: ["name", "contactName", "phone"],
+    sort: { name: 1 },
+    row: (d) => ({ title: s(d.name), sub: `${s(d.kind)}・${s(d.status)}`, date: s(d.createdAt) }),
+  },
   users: {
     label: "使用者帳號",
     model: UserModel,
@@ -158,5 +165,5 @@ export async function deleteRow(name: string, id: string, cascade: boolean, by: 
   collectionOf(name);
   if (name === "customers") return deleteCustomer(id, cascade);
   if (name === "orders") return deleteOrder(id, by);
-  return deleteDoc(name as "products" | "agencies" | "busCompanies" | "bookings" | "groupBuys", id, cascade);
+  return deleteDoc(name as "products" | "agencies" | "busCompanies" | "bookings" | "groupBuys" | "groupBuyers", id, cascade);
 }

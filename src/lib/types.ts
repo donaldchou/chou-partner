@@ -4,6 +4,7 @@ import type {
   BACKUP_KINDS,
   BOOKING_STATUSES,
   BUYING_POWERS,
+  GROUP_BUYER_KINDS,
   BRANDS,
   CUSTOMER_SOURCES,
   DELIVERY_SLOTS,
@@ -309,8 +310,26 @@ export interface ShippingBackup {
 export type ShippingMode = (typeof SHIPPING_MODES)[number];
 export type GroupBuyStatus = (typeof GROUP_BUY_STATUSES)[number];
 
+export type GroupBuyerKind = (typeof GROUP_BUYER_KINDS)[number];
+
+/** 團購業者（像旅行社一樣分配合中／待聯絡）；團購（GroupBuy）用 buyerId 指到這裡 */
+export interface GroupBuyer extends CompanyInfo {
+  status?: AgencyStatus;
+  kind?: GroupBuyerKind;
+  /** 縣市（篩選用）；沒填時從地址開頭推算 */
+  city?: string;
+  /** 網路上查到這家有賣水果／生鮮團購的證據；有值就顯示「有水果團購」標籤 */
+  fruitDeal?: string;
+  /** 粉絲專頁、IG、LINE 社群等連結（可多個） */
+  links?: string[];
+  /** 資料來源網址（空白分隔） */
+  source?: string;
+}
+
 export interface GroupBuy {
   id: string;
+  /** 開這團的團購業者（選填） */
+  buyerId?: string;
   name: string;
   contactName: string;
   phone: string;
@@ -342,5 +361,6 @@ export interface AppState {
   busCompanies: BusCompany[];
   bookings: Booking[];
   groupBuys: GroupBuy[];
+  groupBuyers: GroupBuyer[];
   customerTags: CustomerTag[];
 }

@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
+import { AGENCY_STATUSES } from "@/lib/enums";
+import { useAppState } from "@/lib/store";
 import type { GroupBuy, GroupBuyStatus, ShippingMode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import BusinessCardCapture from "./BusinessCardCapture";
@@ -24,8 +27,22 @@ export default function GroupBuyForm({
   onSubmit: (g: GroupBuy) => void;
   onCancel?: () => void;
 }) {
+  const { groupBuyers } = useAppState();
   const [g, setG] = useState(initial);
   const set = <K extends keyof GroupBuy>(k: K, v: GroupBuy[K]) => setG((p) => ({ ...p, [k]: v }));
+
+  // 選了團購業者：聯絡資料還空著的就從業者帶入
+  function pickBuyer(buyerId: string) {
+    const b = groupBuyers.find((x) => x.id === buyerId);
+    setG((p) => ({
+      ...p,
+      buyerId: buyerId || undefined,
+      contactName: p.contactName || b?.contactName || b?.name || "",
+      phone: p.phone || b?.phone || "",
+      address: p.address || b?.address || "",
+      lineName: p.lineName || b?.lineName || "",
+    }));
+  }
 
   return (
     <form
@@ -58,6 +75,30 @@ export default function GroupBuyForm({
           <Card>
             <SectionTitle>團購資訊</SectionTitle>
             <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="團購業者" className="sm:col-span-2">
+                <div className="flex gap-2">
+                  <Select value={g.buyerId ?? ""} onChange={(e) => pickBuyer(e.target.value)}>
+                    <option value="">未指定</option>
+                    {AGENCY_STATUSES.map((s) => (
+                      <optgroup key={s} label={s}>
+                        {groupBuyers
+                          .filter((b) => (b.status ?? "配合中") === s)
+                          .map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.name}
+                            </option>
+                          ))}
+                      </optgroup>
+                    ))}
+                  </Select>
+                  <Link
+                    href="/group-buys/buyers/new"
+                    className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                  >
+                    ＋ 新團購業者
+                  </Link>
+                </div>
+              </Field>
               <Field label="團購名稱" required className="sm:col-span-2">
                 <Input required placeholder="例：好媽咪團購 10 月甜柿團" value={g.name} onChange={(e) => set("name", e.target.value)} />
               </Field>

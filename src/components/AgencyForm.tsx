@@ -6,21 +6,30 @@ import type { CompanyInfo } from "@/lib/types";
 import { BusinessCardMultiCapture } from "./BusinessCardCapture";
 import { Button, Card, Field, Input, Textarea } from "./ui";
 
-/** 旅行社、遊覽車公司共用的公司資料表單；label 是畫面上的稱呼 */
+/**
+ * 旅行社、遊覽車公司、團購業者共用的公司資料表單；label 是畫面上的稱呼。
+ * extra：放在網站欄位前的額外欄位（例如團購業者的類型、社群連結）
+ */
 export default function AgencyForm<T extends CompanyInfo>({
   initial,
   label = "旅行社",
   notePlaceholder = "例如：客群特性、習慣到場時段…",
+  phoneRequired = true,
+  extra,
   onSubmit,
   onCancel,
 }: {
   initial: T;
   label?: string;
   notePlaceholder?: string;
+  /** 社群團購主常沒有公開電話，可設為 false */
+  phoneRequired?: boolean;
+  extra?: (a: T, patch: (p: Partial<T>) => void) => React.ReactNode;
   onSubmit: (a: T) => void;
   onCancel: () => void;
 }) {
-  const [a, setA] = useState<CompanyInfo>(initial);
+  const [a, setA] = useState<T>(initial);
+  const patch = (p: Partial<T>) => setA((prev) => ({ ...prev, ...p }));
   const set = <K extends keyof CompanyInfo>(k: K, v: CompanyInfo[K]) => setA((p) => ({ ...p, [k]: v }));
   // 舊資料只有一張 cardImage
   const cardImages = a.cardImages?.length ? a.cardImages : a.cardImage ? [a.cardImage] : [];
@@ -32,7 +41,7 @@ export default function AgencyForm<T extends CompanyInfo>({
       onSubmit={(e) => {
         e.preventDefault();
         // 空白的其他電話不存
-        onSubmit({ ...initial, ...a, otherPhones: otherPhones.map((p) => p.trim()).filter(Boolean) });
+        onSubmit({ ...a, otherPhones: otherPhones.map((p) => p.trim()).filter(Boolean) });
       }}
     >
       {/* 寬螢幕：名片在左、欄位在右 */}
@@ -55,8 +64,8 @@ export default function AgencyForm<T extends CompanyInfo>({
             <Field label="聯絡窗口">
               <Input value={a.contactName ?? ""} onChange={(e) => set("contactName", e.target.value)} />
             </Field>
-            <Field label="電話" required>
-              <Input required type="tel" value={a.phone} onChange={(e) => set("phone", e.target.value)} />
+            <Field label="電話" required={phoneRequired}>
+              <Input required={phoneRequired} type="tel" value={a.phone} onChange={(e) => set("phone", e.target.value)} />
             </Field>
             <div className="space-y-2 sm:col-span-2">
               {otherPhones.map((p, i) => (
@@ -89,6 +98,7 @@ export default function AgencyForm<T extends CompanyInfo>({
             <Field label="地址">
               <Input value={a.address ?? ""} onChange={(e) => set("address", e.target.value)} />
             </Field>
+            {extra?.(a, patch)}
             <Field label="網站" className="sm:col-span-2">
               <Input type="url" placeholder="https://" value={a.website ?? ""} onChange={(e) => set("website", e.target.value)} />
             </Field>

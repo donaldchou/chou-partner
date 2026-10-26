@@ -12,7 +12,7 @@ const statusColor = { 洽談中: "amber", 進行中: "green", 已出貨: "blue",
 type Filter = "all" | GroupBuyStatus;
 
 export default function GroupBuysPage() {
-  const { groupBuys } = useAppState();
+  const { groupBuys, groupBuyers } = useAppState();
   const [filter, setFilter] = useState<Filter>("all");
   const list = groupBuys.filter((g) => filter === "all" || g.status === filter);
   const statuses: GroupBuyStatus[] = ["洽談中", "進行中", "已出貨", "已結案"];
@@ -20,8 +20,8 @@ export default function GroupBuysPage() {
   return (
     <div>
       <PageHeader
-        title="團購管理"
-        subtitle="團購業者合作、品項金額與宅配單"
+        title="團購列表"
+        subtitle="每一次開團的品項金額、合作紀錄與宅配單；業者資料在「團購管理」"
         actions={<LinkButton href="/group-buys/new">＋ 新增團購</LinkButton>}
       />
 
@@ -45,6 +45,11 @@ export default function GroupBuysPage() {
                   <div className="font-semibold text-slate-800">{g.name}</div>
                   <Badge color={statusColor[g.status]}>{g.status}</Badge>
                 </div>
+                {g.buyerId && (
+                  <div className="text-xs font-medium text-violet-700">
+                    {groupBuyers.find((b) => b.id === g.buyerId)?.name ?? "（已刪除的團購業者）"}
+                  </div>
+                )}
                 <div className="mt-1 text-sm text-slate-500">
                   {g.contactName}・{g.phone}
                   {g.lineName && `・LINE ${g.lineName}`}

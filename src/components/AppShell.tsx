@@ -66,7 +66,7 @@ const NAV = [
     group: "團購管理",
     items: [
       { href: "/group-buys", label: "團購列表", icon: ListOrdered },
-      { href: "/group-buys/new", label: "團購管理", icon: PackagePlus, admin: true },
+      { href: "/group-buys/buyers", label: "團購管理", icon: PackagePlus },
     ],
   },
 ];

@@ -118,8 +118,8 @@ export default function AgenciesPage() {
         <div className="flex rounded-lg border border-slate-300 bg-white p-0.5" role="group" aria-label="檢視方式">
           {(
             [
-              { v: "card", label: "卡片", Icon: LayoutGrid },
               { v: "list", label: "清單", Icon: List },
+              { v: "card", label: "卡片", Icon: LayoutGrid },
             ] as const
           ).map(({ v, label, Icon }) => (
             <button

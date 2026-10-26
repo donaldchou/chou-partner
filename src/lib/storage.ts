@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { CustomerModel } from "@/models/customer";
 import { DeletedOrderModel } from "@/models/deleted-order";
-import { GroupBuyModel } from "@/models/group-buy";
+import { GroupBuyerModel, GroupBuyModel } from "@/models/group-buy";
 import { OrderModel } from "@/models/order";
 import { AgencyModel, BusCompanyModel } from "@/models/tour";
 import { HttpError } from "./api";
@@ -73,6 +73,7 @@ const FILE_FIELDS = [
   { model: AgencyModel, paths: ["cardImage", "cardImages", "people.photos", "plans.photos"] },
   { model: BusCompanyModel, paths: ["cardImage", "cardImages", "people.photos"] },
   { model: GroupBuyModel, paths: ["cardImage", "backups.fileUrl"] },
+  { model: GroupBuyerModel, paths: ["cardImage", "cardImages"] },
   { model: OrderModel, paths: ["shipments.packages.labelUrl", "payment.reports.photoUrl"] },
   // 已刪除紀錄裡的訂單還可以還原，檔案也要保留
   { model: DeletedOrderModel, paths: ["order.shipments.packages.labelUrl", "order.payment.reports.photoUrl"] },

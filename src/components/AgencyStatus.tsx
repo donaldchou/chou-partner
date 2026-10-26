@@ -6,11 +6,14 @@ import type { Agency, AgencyStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui";
 
+// 旅行社、團購業者共用：配合中／待聯絡、縣市、醒目標籤
+type Partner = { name: string; status?: AgencyStatus; city?: string; address?: string };
+
 /** 舊資料沒有 status＝配合中 */
-export const agencyStatus = (a: Agency): AgencyStatus => a.status ?? "配合中";
+export const agencyStatus = (a: Partner): AgencyStatus => a.status ?? "配合中";
 
 /** 縣市：有填用填的，否則從地址開頭推算（臺→台，對齊 COUNTIES） */
-export const agencyCity = (a: Agency) =>
+export const agencyCity = (a: Partner) =>
   a.city || (/^(.{2}[市縣])/.exec((a.address ?? "").replace(/^臺/, "台"))?.[1] ?? "");
 
 /** 滑鼠移上去的說明：依發展觀光條例第 27 條、旅行業管理規則的業務範圍（營業範圍：綜合＞甲種＞乙種） */
@@ -40,8 +43,8 @@ export function LicenseBadge({ license }: { license?: string }) {
   );
 }
 
-/** 網路上查到這家旅行社有採果行程：醒目的橘色標籤 */
-export function FruitTourBadge({ className }: { className?: string }) {
+/** 網路上查到這家旅行社有採果行程（團購業者：有水果團購）：醒目的橘色標籤 */
+export function FruitTourBadge({ className, label = "有採果行程" }: { className?: string; label?: string }) {
   return (
     <span
       className={cn(
@@ -49,12 +52,12 @@ export function FruitTourBadge({ className }: { className?: string }) {
         className,
       )}
     >
-      <Citrus size={13} /> 有採果行程
+      <Citrus size={13} /> {label}
     </span>
   );
 }
 
-export function AgencyStatusBadge({ agency }: { agency: Agency }) {
+export function AgencyStatusBadge({ agency }: { agency: Partner }) {
   const s = agencyStatus(agency);
   return (
     <span
@@ -68,8 +71,16 @@ export function AgencyStatusBadge({ agency }: { agency: Agency }) {
   );
 }
 
-/** 待聯絡 → 配合中（聯絡完成、有意願配合）；配合中可改回待聯絡 */
-export function AgencyStatusButton({ agency, className }: { agency: Agency; className?: string }) {
+/** 待聯絡 → 配合中（聯絡完成、有意願配合）；配合中可改回待聯絡。onSave 不給時存成旅行社 */
+export function AgencyStatusButton<T extends Partner>({
+  agency,
+  className,
+  onSave = (a) => actions.saveAgency(a as unknown as Agency),
+}: {
+  agency: T;
+  className?: string;
+  onSave?: (a: T) => void;
+}) {
   const toActive = agencyStatus(agency) === "待聯絡";
   return (
     <Button
@@ -82,7 +93,7 @@ export function AgencyStatusButton({ agency, className }: { agency: Agency; clas
         const msg = toActive
           ? `「${agency.name}」聯絡完成、有意願配合，轉到「配合中」？`
           : `把「${agency.name}」改回「待聯絡」？`;
-        if (confirm(msg)) actions.saveAgency({ ...agency, status: toActive ? "配合中" : "待聯絡" });
+        if (confirm(msg)) onSave({ ...agency, status: toActive ? "配合中" : "待聯絡" });
       }}
     >
       {toActive ? "✓ 轉為配合中" : "改回待聯絡"}

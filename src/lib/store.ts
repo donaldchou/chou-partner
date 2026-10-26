@@ -1,10 +1,10 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import type { Agency, AppState, Booking, BusCompany, Customer, CustomerTag, GroupBuy, Order, Product } from "./types";
+import type { Agency, AppState, Booking, BusCompany, Customer, CustomerTag, GroupBuy, GroupBuyer, Order, Product } from "./types";
 
 // 前端資料快取：啟動時從 /api/db 載入，寫入時先更新畫面（樂觀更新）再送到後端。
-const EMPTY: AppState = { products: [], agencies: [], busCompanies: [], bookings: [], groupBuys: [], customerTags: [] };
+const EMPTY: AppState = { products: [], agencies: [], busCompanies: [], bookings: [], groupBuys: [], groupBuyers: [], customerTags: [] };
 
 export type DBStatus = "idle" | "loading" | "ready" | "error";
 
@@ -146,6 +146,10 @@ export const actions = {
 
   saveGroupBuy: (g: GroupBuy) => quiet(save("groupBuys", g)),
   deleteGroupBuy: (id: string) => quiet(remove("groupBuys", id)),
+
+  // 刪除業者不刪團購，後端只清掉團購上的 buyerId，存完重新載入
+  saveGroupBuyer: (b: GroupBuyer) => quiet(save("groupBuyers", b)),
+  deleteGroupBuyer: (id: string) => quiet(remove("groupBuyers", id).then(reload)),
 
   // 標籤選項依 order 排序，存完讓列表照新順序重排
   saveCustomerTag: (t: CustomerTag) => {
