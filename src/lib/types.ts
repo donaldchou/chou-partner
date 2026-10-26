@@ -202,11 +202,37 @@ export interface AgencyPlan {
   cardPhoto?: string;
 }
 
+/** 旅行社、遊覽車公司共用的公司資料（AgencyForm 編輯） */
+export interface CompanyInfo {
+  id: string;
+  name: string;
+  contactName?: string;
+  /** 主要電話 */
+  phone: string;
+  /** 其他電話（可新增多支） */
+  otherPhones?: string[];
+  address?: string;
+  lineName?: string;
+  /** 名片照片（可多張）；cardImage 是其中選來辨識的那張 */
+  cardImages?: string[];
+  cardImage?: string;
+  note?: string;
+  createdAt: string;
+}
+
+/** 配合的遊覽車公司；people 是這家公司的司機 */
+export interface BusCompany extends CompanyInfo {
+  people: Person[];
+}
+
 export interface Agency {
   id: string;
   name: string;
   contactName?: string;
+  /** 主要電話 */
   phone: string;
+  /** 其他電話（可新增多支） */
+  otherPhones?: string[];
   address?: string;
   lineName?: string;
   /** 名片照片（可多張）；cardImage 是其中選來辨識的那張 */
@@ -227,7 +253,9 @@ export interface Booking {
   datetime: string; // YYYY-MM-DDTHH:mm
   headcount: number;
   leaderId?: string;
+  /** 司機：旅行社或配合遊覽車公司登錄的司機 */
   driverId?: string;
+  busCompanyId?: string;
   planId?: string;
   plate: string;
   county: string;
@@ -307,6 +335,7 @@ export interface CustomerTag {
 export interface AppState {
   products: Product[];
   agencies: Agency[];
+  busCompanies: BusCompany[];
   bookings: Booking[];
   groupBuys: GroupBuy[];
   customerTags: CustomerTag[];

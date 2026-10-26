@@ -3,7 +3,7 @@ import { CustomerModel } from "@/models/customer";
 import { DeletedOrderModel } from "@/models/deleted-order";
 import { GroupBuyModel } from "@/models/group-buy";
 import { OrderModel } from "@/models/order";
-import { AgencyModel } from "@/models/tour";
+import { AgencyModel, BusCompanyModel } from "@/models/tour";
 import { HttpError } from "./api";
 import { LL3_PREFIX, isLl3Url, ll3Delete, ll3Get, ll3List } from "./ll3";
 import { connectDB } from "./mongodb";
@@ -71,6 +71,7 @@ export async function deleteFiles(urls: Iterable<string>) {
 const FILE_FIELDS = [
   { model: CustomerModel, paths: ["cardImage"] },
   { model: AgencyModel, paths: ["cardImage", "cardImages", "people.photos", "plans.photos"] },
+  { model: BusCompanyModel, paths: ["cardImage", "cardImages", "people.photos"] },
   { model: GroupBuyModel, paths: ["cardImage", "backups.fileUrl"] },
   { model: OrderModel, paths: ["shipments.packages.labelUrl", "payment.reports.photoUrl"] },
   // 已刪除紀錄裡的訂單還可以還原，檔案也要保留

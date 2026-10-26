@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useState, useSyncExternalStore } from "react";
 import {
   AlertTriangle,
+  Building2,
   Bus,
   ChevronDown,
   ChevronsLeft,
@@ -54,10 +55,11 @@ const NAV = [
     ],
   },
   {
-    group: "遊覽車管理",
+    group: "採果/旅行社/遊覽車管理",
     items: [
       { href: "/tours/bookings", label: "採果預約", icon: CalendarClock },
-      { href: "/tours/agencies", label: "旅行社管理", icon: Bus },
+      { href: "/tours/agencies", label: "旅行社管理", icon: Building2 },
+      { href: "/tours/bus-companies", label: "遊覽車管理", icon: Bus },
     ],
   },
   {

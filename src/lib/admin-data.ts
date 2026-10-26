@@ -3,7 +3,7 @@ import { CustomerModel } from "@/models/customer";
 import { GroupBuyModel } from "@/models/group-buy";
 import { OrderModel } from "@/models/order";
 import { ProductModel } from "@/models/product";
-import { AgencyModel, BookingModel } from "@/models/tour";
+import { AgencyModel, BookingModel, BusCompanyModel } from "@/models/tour";
 import { UserModel } from "@/models/user";
 import { HttpError, toClient } from "./api";
 import { publicUser } from "./auth";
@@ -64,6 +64,13 @@ const ADMIN_COLLECTIONS: Record<
     search: ["name", "contactName", "phone"],
     sort: { name: 1 },
     row: (d) => ({ title: s(d.name), sub: `${s(d.phone)}・領隊/司機 ${((d.people as unknown[]) ?? []).length} 位`, date: s(d.createdAt) }),
+  },
+  busCompanies: {
+    label: "遊覽車公司",
+    model: BusCompanyModel,
+    search: ["name", "contactName", "phone"],
+    sort: { name: 1 },
+    row: (d) => ({ title: s(d.name), sub: `${s(d.phone)}・司機 ${((d.people as unknown[]) ?? []).length} 位`, date: s(d.createdAt) }),
   },
   bookings: {
     label: "採果預約",
@@ -151,5 +158,5 @@ export async function deleteRow(name: string, id: string, cascade: boolean, by: 
   collectionOf(name);
   if (name === "customers") return deleteCustomer(id, cascade);
   if (name === "orders") return deleteOrder(id, by);
-  return deleteDoc(name as "products" | "agencies" | "bookings" | "groupBuys", id, cascade);
+  return deleteDoc(name as "products" | "agencies" | "busCompanies" | "bookings" | "groupBuys", id, cascade);
 }

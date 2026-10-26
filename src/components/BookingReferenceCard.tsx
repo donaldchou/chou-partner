@@ -11,10 +11,11 @@ import { Button, Modal, PrintArea, SaveJpgButton } from "./ui";
 
 /** 採果接待工作單：給員工看今天哪一團、幾個人、走哪個方案 */
 export default function BookingReferenceCard({ booking: b, onClose }: { booking: Booking; onClose: () => void }) {
-  const { agencies } = useAppState();
+  const { agencies, busCompanies } = useAppState();
   const a = agencies.find((x) => x.id === b.agencyId);
+  const bus = busCompanies.find((x) => x.id === b.busCompanyId);
   const leader = a?.people.find((p) => p.id === b.leaderId);
-  const driver = a?.people.find((p) => p.id === b.driverId);
+  const driver = [...(a?.people ?? []), ...(bus?.people ?? [])].find((p) => p.id === b.driverId);
   const plan = a?.plans?.find((p) => p.id === b.planId);
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -56,6 +57,10 @@ export default function BookingReferenceCard({ booking: b, onClose }: { booking:
           <div>
             <b>司機：</b>
             {driver ? `${driver.name} ${driver.phone}` : "—"}
+          </div>
+          <div className="col-span-2">
+            <b>遊覽車公司：</b>
+            {bus ? [bus.name, bus.phone].join(" ") : "—"}
           </div>
           <div>
             <b>車牌：</b>

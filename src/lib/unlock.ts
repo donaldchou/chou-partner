@@ -6,7 +6,7 @@ import { UNLOCK_COOKIE, verifyUnlock } from "./session";
 
 /**
  * 驗證碼：新增、修改、刪除資料除了管理者身分還要驗證碼（環境變數 ADMIN_CODE）。兩種方式：
- * - 後台管理頁「解鎖 1 小時」：發一個綁定登入者、1 小時有效的解鎖 cookie，期間都不用再輸入
+ * - 後台管理頁解鎖：發一個綁定登入者、選定時數（1–12 小時，預設 1）有效的解鎖 cookie，期間都不用再輸入
  * - 其他頁面：每次動作輸入一次，放在 x-verify-code header，只對這一個請求有效
  */
 export function checkCode(code: unknown) {

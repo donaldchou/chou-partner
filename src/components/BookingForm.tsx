@@ -27,22 +27,34 @@ export default function BookingForm({
   onSubmit: (b: Booking) => void;
   onCancel: () => void;
 }) {
-  const { agencies } = useAppState();
+  const { agencies, busCompanies } = useAppState();
   const [b, setB] = useState(initial);
   const [adding, setAdding] = useState<PersonRole | null>(null);
   const set = <K extends keyof Booking>(k: K, v: Booking[K]) => setB((p) => ({ ...p, [k]: v }));
 
   const agency = agencies.find((a) => a.id === b.agencyId);
+  const bus = busCompanies.find((c) => c.id === b.busCompanyId);
   const leaders = agency?.people.filter((p) => p.role === "領隊") ?? [];
-  const drivers = agency?.people.filter((p) => p.role === "司機") ?? [];
+  // 司機可以是旅行社登錄的，也可以是配合遊覽車公司的
+  const agencyDrivers = agency?.people.filter((p) => p.role === "司機") ?? [];
+  const busDrivers = bus?.people ?? [];
+  const driverGroups = [
+    { label: agency ? `${agency.name}（旅行社）` : "旅行社", people: agencyDrivers },
+    { label: bus ? `${bus.name}（遊覽車公司）` : "遊覽車公司", people: busDrivers },
+  ].filter((g) => g.people.length);
   const leader = leaders.find((p) => p.id === b.leaderId);
-  const driver = drivers.find((p) => p.id === b.driverId);
+  const driver = [...agencyDrivers, ...busDrivers].find((p) => p.id === b.driverId);
   const plans = agency?.plans ?? [];
   const plan = plans.find((p) => p.id === b.planId);
 
+  // 換旅行社／遊覽車公司時，司機只保留還在另一邊名單裡的
+  const keepDriver = (ids: Person[]) => (b.driverId && ids.some((p) => p.id === b.driverId) ? b.driverId : undefined);
+
   function addPerson(p: Person) {
-    if (!agency) return;
-    actions.saveAgency({ ...agency, people: [...agency.people, p] });
+    // 有選遊覽車公司時，新司機登錄到遊覽車公司；否則登錄到旅行社
+    if (p.role === "司機" && bus) actions.saveBusCompany({ ...bus, people: [...bus.people, p] });
+    else if (agency) actions.saveAgency({ ...agency, people: [...agency.people, p] });
+    else return;
     set(p.role === "領隊" ? "leaderId" : "driverId", p.id);
     setAdding(null);
   }
@@ -57,7 +69,7 @@ export default function BookingForm({
         }}
       >
         <Card>
-          <SectionTitle>旅行社與時間</SectionTitle>
+          <SectionTitle>旅行社、遊覽車與時間</SectionTitle>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="旅行社" required className="sm:col-span-2">
               <div className="flex gap-2">
@@ -65,7 +77,7 @@ export default function BookingForm({
                   required
                   value={b.agencyId}
                   onChange={(e) =>
-                    setB((p) => ({ ...p, agencyId: e.target.value, leaderId: undefined, driverId: undefined, planId: undefined }))
+                    setB((p) => ({ ...p, agencyId: e.target.value, leaderId: undefined, driverId: keepDriver(busDrivers), planId: undefined }))
                   }
                 >
                   <option value="">請選擇旅行社</option>
@@ -83,6 +95,32 @@ export default function BookingForm({
                 </Link>
               </div>
             </Field>
+            <Field label="配合遊覽車公司" className="sm:col-span-2">
+              <div className="flex gap-2">
+                <Select
+                  value={b.busCompanyId ?? ""}
+                  onChange={(e) => setB((p) => ({ ...p, busCompanyId: e.target.value || undefined, driverId: keepDriver(agencyDrivers) }))}
+                >
+                  <option value="">{busCompanies.length ? "未指定" : "尚未建立遊覽車公司"}</option>
+                  {busCompanies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+                <Link
+                  href="/tours/bus-companies/new"
+                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                >
+                  ＋ 新遊覽車公司
+                </Link>
+              </div>
+              {bus && (
+                <p className="mt-1 text-xs text-slate-500">
+                  {[bus.contactName, bus.phone, ...(bus.otherPhones ?? [])].filter(Boolean).join("・")}
+                </p>
+              )}
+            </Field>
             <Field label="預約時間" required>
               <Input type="datetime-local" required value={b.datetime} onChange={(e) => set("datetime", e.target.value)} />
             </Field>
@@ -96,7 +134,7 @@ export default function BookingForm({
           <PersonPicker
             role="領隊"
             disabled={!agency}
-            options={leaders}
+            groups={[{ label: "", people: leaders }]}
             value={b.leaderId}
             selected={leader}
             onChange={(id) => set("leaderId", id)}
@@ -104,8 +142,8 @@ export default function BookingForm({
           />
           <PersonPicker
             role="司機"
-            disabled={!agency}
-            options={drivers}
+            disabled={!agency && !bus}
+            groups={driverGroups}
             value={b.driverId}
             selected={driver}
             onChange={(id) => set("driverId", id)}
@@ -228,7 +266,7 @@ export default function BookingForm({
 function PersonPicker({
   role,
   disabled,
-  options,
+  groups,
   value,
   selected,
   onChange,
@@ -237,7 +275,8 @@ function PersonPicker({
 }: {
   role: PersonRole;
   disabled: boolean;
-  options: Person[];
+  /** 選項分組；只有一組或 label 空白時不顯示分組標題 */
+  groups: { label: string; people: Person[] }[];
   value?: string;
   selected?: Person;
   onChange: (id: string | undefined) => void;
@@ -256,12 +295,21 @@ function PersonPicker({
         {role}
       </SectionTitle>
       <Select disabled={disabled} value={value ?? ""} onChange={(e) => onChange(e.target.value || undefined)}>
-        <option value="">{disabled ? "請先選擇旅行社" : `選擇${role}`}</option>
-        {options.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}（{p.phone}）
-          </option>
-        ))}
+        <option value="">{disabled ? (role === "司機" ? "請先選擇旅行社或遊覽車公司" : "請先選擇旅行社") : `選擇${role}`}</option>
+        {groups.map((g) => {
+          const opts = g.people.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}（{p.phone}）
+            </option>
+          ));
+          return groups.length > 1 && g.label ? (
+            <optgroup key={g.label} label={g.label}>
+              {opts}
+            </optgroup>
+          ) : (
+            opts
+          );
+        })}
       </Select>
       {selected && (
         <div className="mt-3 space-y-1.5 rounded-lg bg-slate-50 p-3 text-sm">

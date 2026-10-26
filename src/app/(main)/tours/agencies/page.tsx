@@ -9,7 +9,7 @@ export default function AgenciesPage() {
   const { agencies, bookings } = useAppState();
   const [kw, setKw] = useState("");
   const list = agencies.filter((a) =>
-    [a.name, a.contactName, a.phone, ...a.people.flatMap((p) => [p.name, p.phone, p.lineName])]
+    [a.name, a.contactName, a.phone, ...(a.otherPhones ?? []), ...a.people.flatMap((p) => [p.name, p.phone, p.lineName])]
       .filter(Boolean)
       .join(" ")
       .includes(kw.trim()),
@@ -40,7 +40,7 @@ export default function AgenciesPage() {
                       <div className="text-lg font-semibold text-slate-800">{a.name}</div>
                       <div className="text-sm text-slate-500">
                         {a.contactName && `${a.contactName}・`}
-                        {a.phone}
+                        {[a.phone, ...(a.otherPhones ?? [])].join("・")}
                       </div>
                     </div>
                     <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs text-brand-700">{bs.length} 次預約</span>

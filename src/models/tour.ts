@@ -33,6 +33,7 @@ const AgencySchema = new Schema({
   name: required("旅行社名稱"),
   contactName: str,
   phone: required("電話"),
+  otherPhones: { type: [{ type: String, trim: true }], default: [] },
   address: str,
   lineName: str,
   /** 名片照片（可多張）；cardImage 是其中選來辨識的那張 */
@@ -47,6 +48,25 @@ AgencySchema.index({ name: 1 });
 
 export const AgencyModel = defineModel("Agency", AgencySchema, "agencies");
 
+/** 配合的遊覽車公司；people 是這家公司的司機 */
+const BusCompanySchema = new Schema({
+  _id: idField,
+  name: required("遊覽車公司名稱"),
+  contactName: str,
+  phone: required("電話"),
+  otherPhones: { type: [{ type: String, trim: true }], default: [] },
+  address: str,
+  lineName: str,
+  cardImages: photos,
+  cardImage: fileUrl,
+  note: str,
+  createdAt: ymd,
+  people: { type: [PersonSchema], default: [] },
+});
+BusCompanySchema.index({ name: 1 });
+
+export const BusCompanyModel = defineModel("BusCompany", BusCompanySchema, "busCompanies");
+
 /** 遊覽車採果預約；領隊、司機引用旅行社底下 people 的 id，方案引用 plans 的 id */
 const BookingSchema = new Schema({
   _id: idField,
@@ -55,6 +75,7 @@ const BookingSchema = new Schema({
   headcount: { type: Number, required: [true, "請填寫總人數"] as [true, string], min: [1, "總人數至少 1 人"] as [number, string] },
   leaderId: str,
   driverId: str,
+  busCompanyId: { ...str, index: true },
   planId: str,
   plate: { ...str, uppercase: true },
   county: { type: String, enum: ["", ...COUNTIES], default: "" },

@@ -1,10 +1,10 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import type { Agency, AppState, Booking, Customer, CustomerTag, GroupBuy, Order, Product } from "./types";
+import type { Agency, AppState, Booking, BusCompany, Customer, CustomerTag, GroupBuy, Order, Product } from "./types";
 
 // 前端資料快取：啟動時從 /api/db 載入，寫入時先更新畫面（樂觀更新）再送到後端。
-const EMPTY: AppState = { products: [], agencies: [], bookings: [], groupBuys: [], customerTags: [] };
+const EMPTY: AppState = { products: [], agencies: [], busCompanies: [], bookings: [], groupBuys: [], customerTags: [] };
 
 export type DBStatus = "idle" | "loading" | "ready" | "error";
 
@@ -137,6 +137,10 @@ export const actions = {
     quiet(remove("agencies", id, "?cascade=true"));
   },
 
+  // 後端會把被移除的司機從預約裡清掉；刪除公司不刪預約，只清掉預約上的公司與司機
+  saveBusCompany: (c: BusCompany) => quiet(save("busCompanies", c).then(reload)),
+  deleteBusCompany: (id: string) => quiet(remove("busCompanies", id).then(reload)),
+
   saveBooking: (b: Booking) => quiet(save("bookings", b)),
   deleteBooking: (id: string) => quiet(remove("bookings", id)),
 
@@ -244,7 +248,7 @@ export async function logout() {
   window.location.href = "/login";
 }
 
-/* ---------------- 驗證碼解鎖（輸入一次，1 小時內免輸入） ---------------- */
+/* ---------------- 驗證碼解鎖（輸入一次，選定的時數內免輸入） ---------------- */
 let unlockUntil: number | null = null; // 到期時間（毫秒）
 let unlockLoaded = false;
 const unlockListeners = new Set<() => void>();
@@ -280,8 +284,8 @@ export function useUnlock(): number | null | undefined {
   );
 }
 
-export async function unlock(code: string) {
-  const { expiresAt } = await api<{ expiresAt: number }>("/api/unlock", { method: "POST", body: JSON.stringify({ code }) });
+export async function unlock(code: string, hours: number) {
+  const { expiresAt } = await api<{ expiresAt: number }>("/api/unlock", { method: "POST", body: JSON.stringify({ code, hours }) });
   setUnlock(expiresAt);
 }
 
@@ -291,7 +295,7 @@ export async function lockNow() {
 }
 
 /* ---------------- 需要驗證碼時的輸入框（<CodePrompt /> 放在 AppShell） ---------------- */
-// 每次動作各自輸入；要 1 小時免輸入只能到後台管理解鎖
+// 每次動作各自輸入；要一段時間免輸入只能到後台管理解鎖
 export type CodeRequest = {
   submit: (code: string) => Promise<void>;
   cancel: () => void;

@@ -1,11 +1,11 @@
 import { CustomerModel } from "@/models/customer";
 import { CustomerTagModel } from "@/models/customer-tag";
-import { AgencyModel, BookingModel } from "@/models/tour";
+import { AgencyModel, BookingModel, BusCompanyModel } from "@/models/tour";
 import { HttpError, fromClient, toClient } from "./api";
 import { COLLECTIONS, DATE_FIELD, FILTERS, SEARCH_FIELDS, SORT, type CollectionName } from "./collections";
 import { assertNoInlineFiles, collectFileUrls, deleteFiles, deleteRemovedFiles } from "./storage";
 import { connectDB } from "./mongodb";
-import type { AgencyPlan, AppState, Person } from "./types";
+import type { AgencyPlan, AppState, Booking, Person } from "./types";
 import { uid } from "./utils";
 
 type Data = Record<string, unknown>;
@@ -71,22 +71,41 @@ export async function getDoc(name: CollectionName, id: string) {
 
 /* ---------------- 各集合的寫入規則 ---------------- */
 
-/** 預約：旅行社要存在，領隊／司機要是這家旅行社登錄的人，方案要是這家旅行社的方案 */
+/**
+ * 預約：旅行社要存在，領隊要是這家旅行社登錄的人，方案要是這家旅行社的方案；
+ * 遊覽車公司（選填）要存在，司機要是旅行社或這家遊覽車公司登錄的司機
+ */
 async function checkBooking(data: Data) {
   const agency = (await AgencyModel.findById(data.agencyId).lean()) as { people?: Person[]; plans?: AgencyPlan[] } | null;
   if (!agency) throw new HttpError(400, `找不到旅行社（${String(data.agencyId)}）`);
   const people = agency.people ?? [];
-  for (const [field, role] of [
-    ["leaderId", "領隊"],
-    ["driverId", "司機"],
-  ] as const) {
-    const pid = data[field];
-    if (pid && !people.some((p) => p.id === pid && p.role === role)) {
-      throw new HttpError(400, `這家旅行社沒有這位${role}（${String(pid)}）`);
-    }
+  if (data.leaderId && !people.some((p) => p.id === data.leaderId && p.role === "領隊")) {
+    throw new HttpError(400, `這家旅行社沒有這位領隊（${String(data.leaderId)}）`);
+  }
+  let busDrivers: Person[] = [];
+  if (data.busCompanyId) {
+    const bus = (await BusCompanyModel.findById(data.busCompanyId).lean()) as { people?: Person[] } | null;
+    if (!bus) throw new HttpError(400, `找不到遊覽車公司（${String(data.busCompanyId)}）`);
+    busDrivers = bus.people ?? [];
+  }
+  const drivers = [...people.filter((p) => p.role === "司機"), ...busDrivers];
+  if (data.driverId && !drivers.some((p) => p.id === data.driverId)) {
+    throw new HttpError(400, `旅行社與遊覽車公司都沒有這位司機（${String(data.driverId)}）`);
   }
   if (data.planId && !(agency.plans ?? []).some((p) => p.id === data.planId)) {
     throw new HttpError(400, `這家旅行社沒有這個採果方案（${String(data.planId)}）`);
+  }
+}
+
+/** 旅行社或遊覽車公司更新、刪除後：預約上的司機已經不在旅行社也不在遊覽車公司名單裡，就清掉 */
+async function clearStaleDrivers(filter: Record<string, unknown>) {
+  type Row = Pick<Booking, "agencyId" | "busCompanyId" | "driverId"> & { _id: string };
+  const bookings = (await BookingModel.find({ ...filter, driverId: { $ne: "" } }).select("agencyId busCompanyId driverId").lean()) as unknown as Row[];
+  const people = async (Model: typeof AgencyModel, id?: string) =>
+    id ? (((await Model.findById(id).select("people").lean()) as { people?: Person[] } | null)?.people ?? []) : [];
+  for (const b of bookings) {
+    const ok = [...(await people(AgencyModel, b.agencyId)).filter((p) => p.role === "司機"), ...(await people(BusCompanyModel, b.busCompanyId))];
+    if (!ok.some((p) => p.id === b.driverId)) await BookingModel.updateOne({ _id: b._id }, { $set: { driverId: "" } });
   }
 }
 
@@ -96,7 +115,7 @@ async function syncBookingRefs(agencyId: string, data: Data) {
   const plans = (data.plans as AgencyPlan[] | undefined) ?? [];
   const ids = (role: string) => people.filter((p) => p.role === role).map((p) => p.id);
   await BookingModel.updateMany({ agencyId, leaderId: { $nin: ["", ...ids("領隊")] } }, { $set: { leaderId: "" } });
-  await BookingModel.updateMany({ agencyId, driverId: { $nin: ["", ...ids("司機")] } }, { $set: { driverId: "" } });
+  await clearStaleDrivers({ agencyId });
   await BookingModel.updateMany({ agencyId, planId: { $nin: ["", ...plans.map((p) => p.id)] } }, { $set: { planId: "" } });
 }
 
@@ -125,6 +144,7 @@ async function beforeWrite(name: CollectionName, id: string, data: Data) {
 
 async function afterWrite(name: CollectionName, id: string, data: Data, before: Data | null = null) {
   if (name === "agencies") await syncBookingRefs(id, data);
+  if (name === "busCompanies") await clearStaleDrivers({ busCompanyId: id });
   if (name === "customerTags") await renameCustomerTag(before, data);
 }
 
@@ -178,5 +198,12 @@ export async function deleteDoc(name: CollectionName, id: string, cascade: boole
   }
 
   await Model.deleteOne({ _id: id });
+
+  // 遊覽車公司刪掉不影響預約：只清掉預約上的公司，以及只屬於這家公司的司機
+  if (name === "busCompanies") {
+    const affected = await BookingModel.find({ busCompanyId: id }).select("_id").lean();
+    await BookingModel.updateMany({ busCompanyId: id }, { $set: { busCompanyId: "" } });
+    await clearStaleDrivers({ _id: { $in: affected.map((b) => (b as { _id: unknown })._id) } });
+  }
   await deleteFiles(collectFileUrls(doc));
 }

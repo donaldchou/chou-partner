@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Camera, Check, IdCard, ImagePlus, X } from "lucide-react";
 import { api } from "@/lib/store";
 import { discardUpload, photoSrc, uploadImage } from "@/lib/upload";
-import { Button, DemoNote } from "./ui";
+import { Button } from "./ui";
 
 export type CardResult = {
   company: string;
@@ -17,7 +17,28 @@ export type CardResult = {
 };
 
 const recognizeCard = (url: string) =>
-  api<CardResult & { mock: boolean }>("/api/ocr/business-card", { method: "POST", body: JSON.stringify({ url }) });
+  api<CardResult>("/api/ocr/business-card", { method: "POST", body: JSON.stringify({ url }) });
+
+/** 伺服器有沒有設定 AI 辨識（GEMINI_API_KEY）；沒有就只存照片，不辨識、不帶入任何資料。查一次後整個頁面共用 */
+let ocrCheck: Promise<boolean> | undefined;
+function useOcrEnabled() {
+  const [enabled, setEnabled] = useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    ocrCheck ??= api<{ enabled: boolean }>("/api/ocr/business-card")
+      .then((r) => r.enabled)
+      .catch(() => false);
+    let alive = true;
+    void ocrCheck.then((v) => alive && setEnabled(v));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return enabled;
+}
+
+function NoOcrNote() {
+  return <p className="mt-3 text-xs text-slate-500">尚未設定 AI 辨識，名片只會存照片，資料請手動填寫。</p>;
+}
 
 /** 名片快速登錄：拍照 / 上傳名片 → 辨識 → 自動帶入欄位 */
 export default function BusinessCardCapture({
@@ -32,9 +53,9 @@ export default function BusinessCardCapture({
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<"" | "upload" | "ocr">("");
   const [done, setDone] = useState(false);
-  const [mock, setMock] = useState(false);
+  const ocr = useOcrEnabled();
 
-  // 拍完 / 選完照片：上傳後直接辨識
+  // 拍完 / 選完照片：上傳後直接辨識（有設定 AI 辨識時）
   async function pick(file?: File) {
     if (!file) return;
     setDone(false);
@@ -44,7 +65,7 @@ export default function BusinessCardCapture({
       // 重新拍照：換掉的那張若還沒存進資料就刪掉
       discardUpload(image);
       onImage(url);
-      await recognize(url);
+      if (ocr) await recognize(url);
     } catch (e) {
       alert(`名片上傳失敗：${e instanceof Error ? e.message : e}`);
     } finally {
@@ -56,9 +77,7 @@ export default function BusinessCardCapture({
     if (!url) return;
     setBusy("ocr");
     try {
-      const r = await recognizeCard(url);
-      onRecognized(r);
-      setMock(r.mock);
+      onRecognized(await recognizeCard(url));
       setDone(true);
     } catch (e) {
       alert(`名片辨識失敗：${e instanceof Error ? e.message : e}`);
@@ -91,9 +110,11 @@ export default function BusinessCardCapture({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={photoSrc(image)} alt="名片" className="max-h-56 w-full rounded-lg border border-slate-200 bg-white object-contain" />
           <div className="flex flex-col gap-2">
-            <Button onClick={() => recognize()} disabled={!!busy}>
-              {busy === "ocr" ? "辨識中…" : done ? "✓ 重新辨識" : "🔍 辨識名片並帶入資料"}
-            </Button>
+            {ocr && (
+              <Button onClick={() => recognize()} disabled={!!busy}>
+                {busy === "ocr" ? "辨識中…" : done ? "✓ 重新辨識" : "🔍 辨識名片並帶入資料"}
+              </Button>
+            )}
             <Button variant="secondary" disabled={!!busy} onClick={() => inputRef.current?.click()}>
               重新拍照 / 上傳
             </Button>
@@ -123,11 +144,7 @@ export default function BusinessCardCapture({
         </button>
       )}
 
-      {mock && (
-        <div className="mt-3">
-          <DemoNote>尚未設定 GEMINI_API_KEY，帶入的是示範名片資料；設定後會用 AI 辨識實際名片內容。</DemoNote>
-        </div>
-      )}
+      {ocr === false && <NoOcrNote />}
     </div>
   );
 }
@@ -141,17 +158,20 @@ export function BusinessCardMultiCapture({
   selected,
   onChange,
   onRecognized,
+  autoRecognize = true,
 }: {
   images: string[];
   selected?: string;
   onChange: (images: string[], selected: string | undefined) => void;
   onRecognized: (r: CardResult) => void;
+  /** false：上傳後不自動辨識（編輯既有資料時，避免蓋掉已填好的欄位），要辨識請按按鈕 */
+  autoRecognize?: boolean;
 }) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const albumRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState("");
   const [done, setDone] = useState(false);
-  const [mock, setMock] = useState(false);
+  const ocr = useOcrEnabled();
   const current = selected && images.includes(selected) ? selected : images[0];
 
   async function pick(files: File[]) {
@@ -170,16 +190,14 @@ export function BusinessCardMultiCapture({
     // 第一次只拍一張：跟以前一樣直接辨識；多張就讓使用者自己選
     const first = !images.length;
     onChange([...images, ...added], current ?? added[0]);
-    if (first && added.length === 1) await recognize(added[0]);
+    if (ocr && autoRecognize && first && added.length === 1) await recognize(added[0]);
   }
 
   async function recognize(url = current) {
     if (!url) return;
     setBusy("辨識中…");
     try {
-      const r = await recognizeCard(url);
-      onRecognized(r);
-      setMock(r.mock);
+      onRecognized(await recognizeCard(url));
       setDone(true);
     } catch (e) {
       alert(`名片辨識失敗：${e instanceof Error ? e.message : e}`);
@@ -221,7 +239,11 @@ export function BusinessCardMultiCapture({
         <IdCard size={22} className="text-brand-600" />
         <span className="font-semibold text-brand-900">名片快速登錄</span>
       </div>
-      {images.length > 1 && <p className="-mt-1 mb-3 text-xs text-slate-500">共 {images.length} 張，點縮圖選擇要辨識的照片</p>}
+      {images.length > 1 && (
+        <p className="-mt-1 mb-3 text-xs text-slate-500">
+          共 {images.length} 張，點縮圖選擇{ocr ? "要辨識的照片" : "主要名片"}
+        </p>
+      )}
       {fileInput(cameraRef, true)}
       {fileInput(albumRef, false)}
 
@@ -263,9 +285,11 @@ export function BusinessCardMultiCapture({
             </div>
           )}
           <div className="flex flex-col gap-2">
-            <Button onClick={() => recognize()} disabled={!!busy}>
-              {busy === "辨識中…" ? busy : done ? "✓ 重新辨識" : images.length > 1 ? "🔍 辨識選取的照片並帶入資料" : "🔍 辨識名片並帶入資料"}
-            </Button>
+            {ocr && (
+              <Button onClick={() => recognize()} disabled={!!busy}>
+                {busy === "辨識中…" ? busy : done ? "✓ 重新辨識" : images.length > 1 ? "🔍 辨識選取的照片並帶入資料" : "🔍 辨識名片並帶入資料"}
+              </Button>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" disabled={!!busy} onClick={() => cameraRef.current?.click()}>
                 <Camera size={16} /> 再拍一張
@@ -307,11 +331,7 @@ export function BusinessCardMultiCapture({
         </div>
       )}
 
-      {mock && (
-        <div className="mt-3">
-          <DemoNote>尚未設定 GEMINI_API_KEY，帶入的是示範名片資料；設定後會用 AI 辨識實際名片內容。</DemoNote>
-        </div>
-      )}
+      {ocr === false && <NoOcrNote />}
     </div>
   );
 }

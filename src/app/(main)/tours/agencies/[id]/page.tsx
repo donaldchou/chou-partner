@@ -47,7 +47,7 @@ export default function AgencyDetailPage() {
     <div>
       <PageHeader
         title={`${a.name}-總覽`}
-        subtitle={[a.contactName, a.phone, a.lineName && `LINE：${a.lineName}`].filter(Boolean).join("・")}
+        subtitle={[a.contactName, a.phone, ...(a.otherPhones ?? []), a.lineName && `LINE：${a.lineName}`].filter(Boolean).join("・")}
         back="/tours/agencies"
         actions={<LinkButton href={`/tours/bookings/new?agency=${a.id}`}>＋ 新增採果預約</LinkButton>}
       />

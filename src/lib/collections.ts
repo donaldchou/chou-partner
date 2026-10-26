@@ -2,7 +2,7 @@ import type { Model } from "mongoose";
 import { CustomerTagModel } from "@/models/customer-tag";
 import { GroupBuyModel } from "@/models/group-buy";
 import { ProductModel } from "@/models/product";
-import { AgencyModel, BookingModel } from "@/models/tour";
+import { AgencyModel, BookingModel, BusCompanyModel } from "@/models/tour";
 import type { AppState } from "./types";
 
 export type CollectionName = keyof AppState;
@@ -14,6 +14,7 @@ export type CollectionName = keyof AppState;
 export const COLLECTIONS: Record<CollectionName, Model<unknown>> = {
   products: ProductModel,
   agencies: AgencyModel,
+  busCompanies: BusCompanyModel,
   bookings: BookingModel,
   groupBuys: GroupBuyModel,
   customerTags: CustomerTagModel,
@@ -25,6 +26,7 @@ export const isCollection = (name: string): name is CollectionName => name in CO
 export const SORT: Record<CollectionName, Record<string, 1 | -1>> = {
   products: { brand: 1, _id: 1 },
   agencies: { name: 1 },
+  busCompanies: { name: 1 },
   bookings: { datetime: 1 },
   groupBuys: { startDate: -1 },
   customerTags: { order: 1, name: 1 },
@@ -33,14 +35,15 @@ export const SORT: Record<CollectionName, Record<string, 1 | -1>> = {
 /** GET /api/<collection>?欄位=值 可直接篩選的欄位 */
 export const FILTERS: Partial<Record<CollectionName, string[]>> = {
   products: ["brand", "category"],
-  bookings: ["agencyId", "status", "county"],
+  bookings: ["agencyId", "busCompanyId", "status", "county"],
   groupBuys: ["status", "shippingMode"],
 };
 
 /** ?q= 關鍵字搜尋的欄位（不分大小寫、空白分隔的每個字都要符合） */
 export const SEARCH_FIELDS: Partial<Record<CollectionName, string[]>> = {
   products: ["_id", "name", "category", "spec"],
-  agencies: ["name", "contactName", "phone", "lineName", "people.name", "people.phone", "people.lineName"],
+  agencies: ["name", "contactName", "phone", "otherPhones", "lineName", "people.name", "people.phone", "people.lineName"],
+  busCompanies: ["name", "contactName", "phone", "otherPhones", "lineName", "people.name", "people.phone", "people.lineName"],
   bookings: ["plate", "county", "buyingPowerNote", "note"],
   groupBuys: ["name", "contactName", "phone", "lineName", "items.product", "recipients.name", "recipients.phone"],
 };

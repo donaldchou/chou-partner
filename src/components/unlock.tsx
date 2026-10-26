@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Lock, LockOpen, ShieldAlert } from "lucide-react";
+import { Lock, LockOpen, Minus, Plus, ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { lockNow, unlock, useCanEdit, useCodeRequest, useUnlock, type CodeRequest } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -9,7 +9,7 @@ import { Button, Field, Input, Modal } from "./ui";
 
 /**
  * 驗證碼：所有頁面都可以直接檢視；新增、修改、刪除才要驗證碼（後端寫入 API 呼叫 requireEditor）。
- * - 只有後台管理頁的 <UnlockPanel /> 可以「解鎖 1 小時」，期間都不用再輸入
+ * - 只有後台管理頁的 <UnlockPanel /> 可以解鎖（可調 1–12 小時，預設 1 小時），期間都不用再輸入
  * - 其他時候寫入：api() 透過 <CodePrompt />（AppShell）跳出輸入框，驗證碼只對這一次動作有效
  * - 每頁標題旁有 <UnlockTimer />（PageHeader 自動加上）
  */
@@ -25,10 +25,17 @@ function useNow(active: boolean) {
   return now;
 }
 
+/** 倒數：1 小時以上顯示 時:分:秒，否則 分:秒 */
 const mmss = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000));
-  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const h = Math.floor(s / 3600);
+  return `${h ? `${h}:` : ""}${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
 };
+
+// 和後端 UNLOCK_HOURS（src/lib/session.ts）一致
+const HOURS_MIN = 1;
+const HOURS_MAX = 12;
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -61,7 +68,7 @@ export function UnlockTimer() {
       <Lock size={15} />
       新增／修改／刪除需輸入驗證碼
       <Link href="/admin" className="text-xs text-brand-700 underline underline-offset-2 hover:text-brand-900">
-        到後台解鎖 1 小時
+        到後台解鎖
       </Link>
     </div>
   );
@@ -108,7 +115,7 @@ function CodePromptDialog({ req }: { req: CodeRequest }) {
           <div>
             新增、修改、刪除資料需要驗證碼，這次輸入只對這個動作有效。
             <div className="mt-0.5 text-xs text-amber-700">
-              要 1 小時內免輸入，請到
+              要一段時間內免輸入，請到
               <Link href="/admin" onClick={req.cancel} className="mx-0.5 text-brand-700 underline underline-offset-2">
                 後台管理
               </Link>
@@ -134,10 +141,11 @@ function CodePromptDialog({ req }: { req: CodeRequest }) {
   );
 }
 
-/** 驗證碼解鎖區塊：輸入一次，1 小時內不用再輸入；解鎖中顯示倒數與「立即鎖定」 */
+/** 驗證碼解鎖區塊：輸入一次，選定的時數內不用再輸入；解鎖中顯示倒數與「立即鎖定」 */
 export function UnlockPanel() {
   const until = useUnlock();
   const now = useNow(!!until);
+  const [hours, setHours] = useState(HOURS_MIN);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -150,7 +158,7 @@ export function UnlockPanel() {
     setBusy(true);
     setError("");
     try {
-      await unlock(code.trim());
+      await unlock(code.trim(), hours);
     } catch (err) {
       setError(errMsg(err));
     } finally {
@@ -178,7 +186,7 @@ export function UnlockPanel() {
                   <b className={cn("tabular-nums", left <= 5 * 60 * 1000 && "text-red-600")}>{mmss(left)}</b> 後失效。
                 </>
               ) : (
-                "輸入一次驗證碼，1 小時內所有需要驗證碼的動作都不用再輸入。"
+                `輸入一次驗證碼，${hours} 小時內所有需要驗證碼的動作都不用再輸入。`
               )}
             </div>
           </div>
@@ -188,7 +196,31 @@ export function UnlockPanel() {
             立即鎖定
           </Button>
         ) : (
-          <form onSubmit={submit} className="flex items-start gap-2">
+          <form onSubmit={submit} className="flex flex-wrap items-start gap-2">
+            {/* 時數只能用 − ＋ 調整，不能直接輸入 */}
+            <div className="flex h-[42px] items-center rounded-lg border border-slate-300 bg-white" role="group" aria-label="解鎖時數">
+              <button
+                type="button"
+                aria-label="減少 1 小時"
+                disabled={hours <= HOURS_MIN}
+                onClick={() => setHours((h) => Math.max(HOURS_MIN, h - 1))}
+                className="flex h-full w-9 items-center justify-center rounded-l-lg text-slate-600 hover:bg-slate-100 disabled:text-slate-300 disabled:hover:bg-transparent"
+              >
+                <Minus size={16} />
+              </button>
+              <span className="min-w-16 select-none text-center text-sm font-semibold tabular-nums text-slate-800" aria-live="polite">
+                {hours} 小時
+              </span>
+              <button
+                type="button"
+                aria-label="增加 1 小時"
+                disabled={hours >= HOURS_MAX}
+                onClick={() => setHours((h) => Math.min(HOURS_MAX, h + 1))}
+                className="flex h-full w-9 items-center justify-center rounded-r-lg text-slate-600 hover:bg-slate-100 disabled:text-slate-300 disabled:hover:bg-transparent"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
             <div>
               <Input
                 type="password"
@@ -204,7 +236,7 @@ export function UnlockPanel() {
               {error && <div className="mt-1 text-xs font-medium text-red-600">{error}</div>}
             </div>
             <Button type="submit" disabled={busy || until === undefined}>
-              {busy ? "驗證中…" : "解鎖 1 小時"}
+              {busy ? "驗證中…" : `解鎖 ${hours} 小時`}
             </Button>
           </form>
         )}

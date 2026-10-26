@@ -9,8 +9,8 @@
 | `MONGODB_URI` | ✓ | MongoDB Atlas 連線字串 |
 | `LL3_FILE_KEY` | ✓ | ll3 檔案主機簽章金鑰（同 `file_api_partner.asp` 的 FILE_API_KEY），存名片、照片、宅配單檔案 |
 | `JWT_SECRET` | ✓ | 登入 JWT 的簽章密鑰（至少 32 個字元的隨機字串）；部署到 Vercel 時也要設定 |
-| `ADMIN_CODE` | ✓ | 後台驗證碼；輸入正確後 1 小時內所有需要驗證碼的功能都不用再輸入 |
-| `GEMINI_API_KEY` | | 名片 AI 辨識、無表格 Word 的 AI 整理；沒設定時名片辨識回傳示範資料 |
+| `ADMIN_CODE` | ✓ | 後台驗證碼；輸入正確後在選定的時數內（後台可調 1–12 小時，預設 1 小時）所有需要驗證碼的功能都不用再輸入 |
+| `GEMINI_API_KEY` | | 名片 AI 辨識、無表格 Word 的 AI 整理；沒設定時名片只存照片、不顯示辨識按鈕（不會帶入任何假資料） |
 | `GEMINI_MODEL` | | 預設 `gemini-3.6-flash`，失敗時自動改用 `gemini-3.5-flash-lite` |
 
 ```bash
@@ -30,7 +30,7 @@ npm run import:legacy                   # 匯入 db_test_file/mdb 與 db_test_fi
 
 每個 API 都會回資料庫確認帳號狀態，後台停用帳號或改身分會立刻生效。至少要保留一位啟用中的管理者，不能停用、降級或刪除自己。
 
-**驗證碼**：後台（`/admin`）除了管理者身分還要輸入驗證碼（`ADMIN_CODE`）。輸入正確後發一個綁定登入者、1 小時有效的 HttpOnly 解鎖 cookie，期間所有需要驗證碼的功能都不用再輸入，頁面上顯示倒數，也可以「立即上鎖」；連續輸錯 5 次鎖 15 分鐘。新增需要驗證碼的功能：API 呼叫 `requireUnlocked()`，頁面用 `<CodeGate>` 包住內容、標題旁放 `<UnlockTimer />`，並加到 `src/components/unlock.tsx` 的 `CODE_PAGES`。
+**驗證碼**：後台（`/admin`）除了管理者身分還要輸入驗證碼（`ADMIN_CODE`）。輸入正確後發一個綁定登入者、在選定時數內有效（用 − ＋ 調整 1–12 小時，預設 1 小時）的 HttpOnly 解鎖 cookie，期間所有需要驗證碼的功能都不用再輸入，頁面上顯示倒數，也可以「立即上鎖」；連續輸錯 5 次鎖 15 分鐘。新增需要驗證碼的功能：API 呼叫 `requireUnlocked()`，頁面用 `<CodeGate>` 包住內容、標題旁放 `<UnlockTimer />`，並加到 `src/components/unlock.tsx` 的 `CODE_PAGES`。
 
 沒有註冊頁。第一個管理者用命令列建立（密碼只從環境變數讀，不會寫進檔案；帳號已存在時不會覆蓋）：
 
@@ -94,7 +94,8 @@ scripts/import-legacy.ts   命令列匯入
 | POST | `/api/upload` | multipart `file`、`uploadId`、`index`、`last`、`name`、`size`、`folder` → ll3 主機（大檔案分段，每段 3MB，單檔 30MB），最後一段回傳 `{ url, name, size, contentType }` |
 | GET | `/api/photo?url=` | 讀取照片 |
 | GET | `/api/file?url=&part=` | 分段讀取檔案（每段 3MB，`X-File-Size` 是總大小） |
-| POST | `/api/ocr/business-card` | `{ url }` → 名片欄位；`mock: true` 表示未設定 Gemini |
+| GET | `/api/ocr/business-card` | `{ enabled }`：有沒有設定 Gemini（前端決定要不要顯示辨識） |
+| POST | `/api/ocr/business-card` | `{ url }` → 名片欄位；未設定 Gemini 時回 503 |
 | POST | `/api/import/parse` | multipart `file`、`kind`=mdb\|word → 統計與前 200 筆預覽（不寫入） |
 | POST | `/api/import/commit` | 同上 → 寫入；已匯入的略過，客戶依電話合併 |
 | GET | `/api/health` | 資料庫連線檢查 |

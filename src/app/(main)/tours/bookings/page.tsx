@@ -15,7 +15,7 @@ import { formatDate, today, weekday } from "@/lib/utils";
 type Filter = "upcoming" | "past" | "cancelled" | "all";
 
 export default function BookingsPage() {
-  const { bookings, agencies } = useAppState();
+  const { bookings, agencies, busCompanies } = useAppState();
   const [filter, setFilter] = useState<Filter>("upcoming");
   const [card, setCard] = useState<Booking | null>(null);
   const canEdit = useCanEdit();
@@ -43,7 +43,7 @@ export default function BookingsPage() {
       <PageHeader
         title="採果時間預約"
         subtitle="旅行社遊覽車團體採果預約"
-        actions={<LinkButton href="/tours/bookings/new">＋ 新增預約</LinkButton>}
+        actions={<LinkButton href="/tours/bookings/new">＋ 新增採果預約</LinkButton>}
       />
 
       <Tabs
@@ -73,7 +73,8 @@ export default function BookingsPage() {
                 {items.map((b) => {
                   const a = agencies.find((x) => x.id === b.agencyId);
                   const leader = a?.people.find((p) => p.id === b.leaderId);
-                  const driver = a?.people.find((p) => p.id === b.driverId);
+                  const bus = busCompanies.find((c) => c.id === b.busCompanyId);
+                  const driver = [...(a?.people ?? []), ...(bus?.people ?? [])].find((p) => p.id === b.driverId);
                   const plan = a?.plans?.find((p) => p.id === b.planId);
                   return (
                     <Card key={b.id} className="flex items-stretch p-0 transition hover:border-brand-300">
@@ -89,7 +90,7 @@ export default function BookingsPage() {
                             <BuyingPowerBadge level={b.buyingPower} />
                           </div>
                           <div className="mt-1 text-sm text-slate-500">
-                            領隊 {leader ? `${leader.name} ${leader.phone}` : "-"}・司機 {driver?.name ?? "-"}・車牌 {b.plate || "-"}
+                            領隊 {leader ? `${leader.name} ${leader.phone}` : "-"}・遊覽車 {bus?.name ?? "-"}・司機 {driver?.name ?? "-"}・車牌 {b.plate || "-"}
                           </div>
                           <div className="text-sm text-slate-500">
                             客群來自 {b.county || "-"}
@@ -97,7 +98,8 @@ export default function BookingsPage() {
                           </div>
                           {plan && (
                             <div className="mt-2 flex items-start gap-3 rounded-lg bg-slate-50 p-2.5 text-sm">
-                              <div className="min-w-0 flex-1 space-y-1">
+                              {/* 不撐滿寬度：照片緊接在文字右邊 */}
+                              <div className="min-w-0 space-y-1">
                                 <div className="font-medium text-slate-700">
                                   🍊 {plan.group && <span className="text-brand-700">{plan.group}・</span>}
                                   {plan.name}
