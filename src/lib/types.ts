@@ -1,4 +1,6 @@
 import type {
+  AGENCY_LICENSES,
+  AGENCY_STATUSES,
   BACKUP_KINDS,
   BOOKING_STATUSES,
   BUYING_POWERS,
@@ -213,6 +215,7 @@ export interface CompanyInfo {
   otherPhones?: string[];
   address?: string;
   lineName?: string;
+  website?: string;
   /** 名片照片（可多張）；cardImage 是其中選來辨識的那張 */
   cardImages?: string[];
   cardImage?: string;
@@ -225,21 +228,22 @@ export interface BusCompany extends CompanyInfo {
   people: Person[];
 }
 
-export interface Agency {
-  id: string;
-  name: string;
-  contactName?: string;
-  /** 主要電話 */
-  phone: string;
-  /** 其他電話（可新增多支） */
-  otherPhones?: string[];
-  address?: string;
-  lineName?: string;
-  /** 名片照片（可多張）；cardImage 是其中選來辨識的那張 */
-  cardImages?: string[];
-  cardImage?: string;
-  note?: string;
-  createdAt: string;
+export type AgencyStatus = (typeof AGENCY_STATUSES)[number];
+
+export type AgencyLicense = (typeof AGENCY_LICENSES)[number];
+
+export interface Agency extends CompanyInfo {
+  /** 配合中／待聯絡；舊資料沒有這個欄位＝配合中 */
+  status?: AgencyStatus;
+  /** 觀光署登記種類（綜合／甲種／乙種）與註冊編號 */
+  license?: AgencyLicense;
+  regNo?: string;
+  /** 縣市（篩選用）；沒填時從地址開頭推算 */
+  city?: string;
+  /** 網路上查到的採果行程（說明或網址）；有值就在列表顯示「有採果行程」標籤 */
+  fruitTour?: string;
+  /** 資料來源網址（從網路整理的待聯絡旅行社） */
+  source?: string;
   people: Person[];
   plans?: AgencyPlan[];
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { AGENCY_STATUSES } from "@/lib/enums";
 import { actions, useAppState } from "@/lib/store";
 import type { Booking, BookingStatus, BuyingPower, Person, PersonRole } from "@/lib/types";
 import { cn, COUNTIES } from "@/lib/utils";
@@ -81,10 +82,16 @@ export default function BookingForm({
                   }
                 >
                   <option value="">請選擇旅行社</option>
-                  {agencies.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
+                  {AGENCY_STATUSES.map((s) => (
+                    <optgroup key={s} label={s}>
+                      {agencies
+                        .filter((a) => (a.status ?? "配合中") === s)
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                    </optgroup>
                   ))}
                 </Select>
                 <Link

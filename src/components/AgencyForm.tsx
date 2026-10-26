@@ -89,6 +89,9 @@ export default function AgencyForm<T extends CompanyInfo>({
             <Field label="地址">
               <Input value={a.address ?? ""} onChange={(e) => set("address", e.target.value)} />
             </Field>
+            <Field label="網站" className="sm:col-span-2">
+              <Input type="url" placeholder="https://" value={a.website ?? ""} onChange={(e) => set("website", e.target.value)} />
+            </Field>
             <Field label="備註" className="sm:col-span-2">
               <Textarea value={a.note ?? ""} onChange={(e) => set("note", e.target.value)} placeholder={notePlaceholder} />
             </Field>

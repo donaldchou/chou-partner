@@ -21,6 +21,10 @@ export const DELIVERY_SLOTS = ["", "早上08~12點", "中午12~18點", "晚上18
 export const SHIPMENT_STATUSES = ["待出貨", "已出貨", "已送達", "退件"] as const;
 export const LEGACY_SOURCES = ["mdb", "word"] as const;
 export const PERSON_ROLES = ["領隊", "司機"] as const;
+/** 旅行社分組：配合中＝已在合作；待聯絡＝從網路整理、還沒談好的名單 */
+export const AGENCY_STATUSES = ["配合中", "待聯絡"] as const;
+/** 觀光署登記的旅行社種類：綜合、甲種可做國內外，乙種只能經營國內旅遊 */
+export const AGENCY_LICENSES = ["綜合", "甲種", "乙種"] as const;
 export const BOOKING_STATUSES = ["已預約", "已到場", "已取消"] as const;
 export const BUYING_POWERS = ["高", "中", "低"] as const;
 export const SHIPPING_MODES = ["provided", "generate"] as const;

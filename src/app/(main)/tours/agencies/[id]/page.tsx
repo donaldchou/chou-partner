@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import AgencyForm from "@/components/AgencyForm";
+import { AgencyStatusBadge, AgencyStatusButton, FruitTourBadge, LicenseBadge } from "@/components/AgencyStatus";
 import PeopleSection from "@/components/PeopleSection";
 import PlanSection from "@/components/PlanSection";
 import { BookingStatusBadge } from "@/components/BookingBadges";
@@ -49,7 +50,19 @@ export default function AgencyDetailPage() {
         title={`${a.name}-總覽`}
         subtitle={[a.contactName, a.phone, ...(a.otherPhones ?? []), a.lineName && `LINE：${a.lineName}`].filter(Boolean).join("・")}
         back="/tours/agencies"
-        actions={<LinkButton href={`/tours/bookings/new?agency=${a.id}`}>＋ 新增採果預約</LinkButton>}
+        info={
+          <>
+            <AgencyStatusBadge agency={a} />
+            <LicenseBadge license={a.license} />
+            {a.fruitTour && <FruitTourBadge />}
+          </>
+        }
+        actions={
+          <>
+            <AgencyStatusButton agency={a} />
+            <LinkButton href={`/tours/bookings/new?agency=${a.id}`}>＋ 新增採果預約</LinkButton>
+          </>
+        }
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -72,8 +85,36 @@ export default function AgencyDetailPage() {
             <dl className="grid grid-cols-[4rem_1fr] gap-y-2 text-sm">
               <dt className="text-slate-400">地址</dt>
               <dd className="text-slate-700">{a.address || "-"}</dd>
+              <dt className="text-slate-400">網站</dt>
+              <dd className="min-w-0 break-all text-slate-700">
+                {a.website ? (
+                  <a href={a.website} target="_blank" rel="noreferrer" className="text-brand-700 underline underline-offset-2">
+                    {a.website}
+                  </a>
+                ) : (
+                  "-"
+                )}
+              </dd>
+              {a.fruitTour && (
+                <>
+                  <dt className="text-accent-600">採果行程</dt>
+                  <dd className="whitespace-pre-line break-all text-accent-600">{a.fruitTour}</dd>
+                </>
+              )}
               <dt className="text-slate-400">備註</dt>
-              <dd className="text-slate-700">{a.note || "-"}</dd>
+              <dd className="whitespace-pre-line text-slate-700">{a.note || "-"}</dd>
+              {a.source && (
+                <>
+                  <dt className="text-slate-400">資料來源</dt>
+                  <dd className="min-w-0 break-all text-xs text-slate-500">
+                    {a.source.split(/\s+/).map((u) => (
+                      <a key={u} href={u} target="_blank" rel="noreferrer" className="block underline underline-offset-2">
+                        {u}
+                      </a>
+                    ))}
+                  </dd>
+                </>
+              )}
               <dt className="text-slate-400">累計</dt>
               <dd className="text-slate-700">
                 到場 {visited.length} 團、{visited.reduce((s, b) => s + b.headcount, 0)} 人、營收{" "}

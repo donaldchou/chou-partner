@@ -1,5 +1,5 @@
 import { Schema } from "mongoose";
-import { BOOKING_STATUSES, BUYING_POWERS, COUNTIES, PERSON_ROLES } from "@/lib/enums";
+import { AGENCY_LICENSES, AGENCY_STATUSES, BOOKING_STATUSES, BUYING_POWERS, COUNTIES, PERSON_ROLES } from "@/lib/enums";
 import { dateTime, defineModel, fileUrl, idField, photos, required, str, sub, ymd } from "./_shared";
 
 /** 旅行社的領隊／司機 */
@@ -36,11 +36,18 @@ const AgencySchema = new Schema({
   otherPhones: { type: [{ type: String, trim: true }], default: [] },
   address: str,
   lineName: str,
+  website: str,
   /** 名片照片（可多張）；cardImage 是其中選來辨識的那張 */
   cardImages: photos,
   cardImage: fileUrl,
   note: str,
   createdAt: ymd,
+  status: { type: String, enum: AGENCY_STATUSES, default: "配合中", index: true },
+  license: { type: String, enum: ["", ...AGENCY_LICENSES], default: "" }, // 觀光署登記種類
+  regNo: str, // 觀光署註冊編號
+  city: str, // 縣市（篩選用）
+  fruitTour: str, // 網路上查到的採果行程（說明或網址）
+  source: str, // 資料來源網址
   people: { type: [PersonSchema], default: [] },
   plans: { type: [PlanSchema], default: [] },
 });
@@ -57,6 +64,7 @@ const BusCompanySchema = new Schema({
   otherPhones: { type: [{ type: String, trim: true }], default: [] },
   address: str,
   lineName: str,
+  website: str,
   cardImages: photos,
   cardImage: fileUrl,
   note: str,

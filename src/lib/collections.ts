@@ -35,6 +35,7 @@ export const SORT: Record<CollectionName, Record<string, 1 | -1>> = {
 /** GET /api/<collection>?欄位=值 可直接篩選的欄位 */
 export const FILTERS: Partial<Record<CollectionName, string[]>> = {
   products: ["brand", "category"],
+  agencies: ["status", "license", "city"],
   bookings: ["agencyId", "busCompanyId", "status", "county"],
   groupBuys: ["status", "shippingMode"],
 };
@@ -42,7 +43,7 @@ export const FILTERS: Partial<Record<CollectionName, string[]>> = {
 /** ?q= 關鍵字搜尋的欄位（不分大小寫、空白分隔的每個字都要符合） */
 export const SEARCH_FIELDS: Partial<Record<CollectionName, string[]>> = {
   products: ["_id", "name", "category", "spec"],
-  agencies: ["name", "contactName", "phone", "otherPhones", "lineName", "people.name", "people.phone", "people.lineName"],
+  agencies: ["name", "contactName", "phone", "otherPhones", "lineName", "address", "website", "fruitTour", "people.name", "people.phone", "people.lineName"],
   busCompanies: ["name", "contactName", "phone", "otherPhones", "lineName", "people.name", "people.phone", "people.lineName"],
   bookings: ["plate", "county", "buyingPowerNote", "note"],
   groupBuys: ["name", "contactName", "phone", "lineName", "items.product", "recipients.name", "recipients.phone"],
