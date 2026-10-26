@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { handleError, readJson } from "@/lib/api";
-import { requireUser } from "@/lib/auth";
+import { requirePage } from "@/lib/access";
 import { requireEditor } from "@/lib/unlock";
 import { deleteCustomer, getCustomer, saveCustomer } from "@/lib/customers-repo";
 
@@ -9,7 +9,7 @@ type Ctx = RouteContext<"/api/customers/[id]">;
 /** GET /api/customers/<id>：客戶 + 全部訂單 */
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
-    await requireUser();
+    await requirePage("customers");
     return NextResponse.json(await getCustomer((await ctx.params).id));
   } catch (err) {
     return handleError(err);

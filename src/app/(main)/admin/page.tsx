@@ -17,6 +17,7 @@ import {
   Td,
   useDebounced,
 } from "@/components/ui";
+import PageAccessPanel from "@/components/PageAccessPanel";
 import { UnlockPanel } from "@/components/unlock";
 import { alertError, api, isCancelled, useMe } from "@/lib/store";
 import { openStoredFile, photoSrc } from "@/lib/upload";
@@ -25,25 +26,40 @@ import type { Order } from "@/lib/types";
 import { useFetch } from "@/lib/use-fetch";
 import { cn, money } from "@/lib/utils";
 
-type Tab = "users" | "data" | "deleted" | "files";
+type Tab = "users" | "access" | "data" | "deleted" | "files";
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("users");
   return (
     <div>
-      <PageHeader title="後台管理" subtitle="管理登入帳號，以及檢視、刪除資料庫裡的所有資料。只有管理者看得到這一頁。" unlockTimer={false} />
+      <PageHeader
+        title="後台管理"
+        subtitle="管理登入帳號與一般使用者可以看的頁面，以及檢視、刪除資料庫裡的所有資料。只有管理者看得到這一頁。"
+        unlockTimer={false}
+      />
       <UnlockPanel />
       <Tabs
         value={tab}
         onChange={setTab}
         tabs={[
           { value: "users", label: "使用者管理" },
+          { value: "access", label: "頁面權限" },
           { value: "data", label: "所有資料" },
           { value: "deleted", label: "已刪除紀錄" },
           { value: "files", label: "清理未使用的檔案" },
         ]}
       />
-      {tab === "users" ? <UsersTab /> : tab === "data" ? <DataTab /> : tab === "deleted" ? <DeletedOrdersTab /> : <FilesTab />}
+      {tab === "users" ? (
+        <UsersTab />
+      ) : tab === "access" ? (
+        <PageAccessPanel />
+      ) : tab === "data" ? (
+        <DataTab />
+      ) : tab === "deleted" ? (
+        <DeletedOrdersTab />
+      ) : (
+        <FilesTab />
+      )}
     </div>
   );
 }

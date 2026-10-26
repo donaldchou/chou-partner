@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { HttpError, handleError, readJson } from "@/lib/api";
-import { requireUser } from "@/lib/auth";
+import { requirePage } from "@/lib/access";
+import { COLLECTION_PAGES, PAGE_KEYS } from "@/lib/page-access";
 import { requireEditor } from "@/lib/unlock";
 import { isCollection } from "@/lib/collections";
 import { deleteDoc, getDoc, saveDoc } from "@/lib/repo";
@@ -16,8 +17,9 @@ async function paramsOf(ctx: Ctx) {
 /** GET /api/<collection>/<id> */
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
-    await requireUser();
     const { name, id } = await paramsOf(ctx);
+    // 沒列在 COLLECTION_PAGES 的集合（產品、標籤）：有任何一個頁面的權限就可以讀
+    await requirePage(...(COLLECTION_PAGES[name] ?? PAGE_KEYS));
     return NextResponse.json(await getDoc(name, id));
   } catch (err) {
     return handleError(err);

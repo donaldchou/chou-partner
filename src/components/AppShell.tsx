@@ -16,6 +16,7 @@ import {
   ReceiptText,
   LayoutDashboard,
   ListOrdered,
+  Lock,
   LogOut,
   Menu,
   ShieldCheck,
@@ -29,7 +30,8 @@ import {
   Tags,
   X,
 } from "lucide-react";
-import { logout, reload, useDBStatus, useMe } from "@/lib/store";
+import { PAGE_HREF, pageLabel, pageOfPath, USER_PAGES } from "@/lib/page-access";
+import { logout, reload, useDBStatus, useMe, type Me } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Loading } from "./ui";
 import { CodePrompt } from "./unlock";
@@ -77,11 +79,16 @@ const ADMIN_NAV = { group: "系統", items: [{ href: "/admin", label: "後台管
 type NavItem = { href: string; label: string; icon: typeof Search; admin?: boolean };
 type NavGroup = { group: string; items: NavItem[] };
 
-/** 依身分過濾選單：一般使用者看不到新增、匯入與後台 */
-function navFor(isAdmin: boolean): NavGroup[] {
-  return [...NAV, ADMIN_NAV]
-    .map((g) => ({ ...g, items: (g.items as NavItem[]).filter((it) => isAdmin || !it.admin) }))
-    .filter((g) => g.items.length);
+/** 依身分過濾選單：一般使用者看不到新增、匯入與後台，也看不到後台「頁面權限」沒開給他的頁面 */
+function navFor(me: Me | null): NavGroup[] {
+  const isAdmin = me?.role === "admin";
+  const canSee = (it: NavItem) => {
+    if (isAdmin) return true;
+    if (it.admin) return false;
+    const page = pageOfPath(it.href.split("?")[0]);
+    return !me || !page || (me.pages ?? []).includes(page);
+  };
+  return [...NAV, ADMIN_NAV].map((g) => ({ ...g, items: (g.items as NavItem[]).filter(canSee) })).filter((g) => g.items.length);
 }
 
 /* ---------------- 側邊選單收合狀態，記在這台電腦的瀏覽器 ---------------- */
@@ -203,9 +210,9 @@ function NavItems({
   onNavigate: () => void;
 }) {
   const current = activeHref(pathname, search);
-  const isAdmin = useMe()?.role === "admin";
+  const me = useMe();
   const { closed, toggle } = useClosedGroups();
-  return navFor(isAdmin).map((g) => {
+  return navFor(me).map((g) => {
     // 只剩圖示的窄選單不分組收合；收合的分組裡有目前頁面時，標題會亮起來提示
     const open = mini || !closed.has(g.group);
     const hasActive = g.items.some((it) => it.href === current);
@@ -266,9 +273,9 @@ function ActiveNavItems(props: { mini: boolean; onNavigate: () => void }) {
 
 /** 選單最上面的圖示：寬選單＝全部分組展開／收合；只剩圖示的窄選單＝展開選單 */
 function BrandButton({ mini, onExpand }: { mini: boolean; onExpand: () => void }) {
-  const isAdmin = useMe()?.role === "admin";
+  const me = useMe();
   const { closed, toggleAll } = useClosedGroups();
-  const groups = navFor(isAdmin).map((g) => g.group);
+  const groups = navFor(me).map((g) => g.group);
   const allClosed = groups.every((g) => closed.has(g));
   const label = mini ? "展開選單" : allClosed ? "全部展開" : "全部收合";
   return (
@@ -361,7 +368,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <main className="px-3 py-4 sm:px-4 lg:py-5 lg:pr-5 print:p-0">
           <DBStatusBanner />
           <ReadOnlyBanner />
-          <Suspense fallback={<Loading />}>{children}</Suspense>
+          <Suspense fallback={<Loading />}>
+            <PageGuard>{children}</PageGuard>
+          </Suspense>
         </main>
         {/* 新增、修改、刪除時還沒解鎖：跳出驗證碼輸入框 */}
         <CodePrompt />
@@ -445,6 +454,32 @@ function UserBlock({ mini }: { mini: boolean }) {
     </div>
   );
 }
+/** 後台「頁面權限」沒開給這個帳號的頁面：不顯示內容，改列出看得到的頁面（資料 API 也會擋，這裡只是畫面） */
+function PageGuard({ children }: { children: React.ReactNode }) {
+  const me = useMe();
+  const page = pageOfPath(usePathname());
+  if (!me || me.role === "admin" || !page || (me.pages ?? []).includes(page)) return children;
+  const pages = USER_PAGES.filter((p) => me.pages.includes(p.key));
+  return (
+    <div className="mx-auto mt-10 max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+      <Lock size={32} className="mx-auto text-slate-400" />
+      <h1 className="mt-3 text-xl font-bold text-slate-800">你的帳號沒有權限查看「{pageLabel(page)}」</h1>
+      <p className="mt-1 text-sm text-slate-500">需要這個頁面請聯絡管理者。</p>
+      {pages.length > 0 ? (
+        <div className="mt-5 flex flex-wrap justify-center gap-2">
+          {pages.map((p) => (
+            <Link key={p.key} href={PAGE_HREF[p.key]} className="rounded-lg bg-brand-50 px-3 py-1.5 text-sm text-brand-700 hover:bg-brand-100">
+              {p.label}
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-5 text-sm text-amber-700">目前沒有開放任何頁面給你的帳號。</p>
+      )}
+    </div>
+  );
+}
+
 /** 一般使用者：提示只能查看 */
 function ReadOnlyBanner() {
   const me = useMe();

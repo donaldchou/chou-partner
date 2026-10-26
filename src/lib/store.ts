@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { PageKey } from "./page-access";
 import type { Agency, AppState, Booking, BusCompany, Customer, CustomerTag, GroupBuy, GroupBuyer, Order, Product } from "./types";
 
 // 前端資料快取：啟動時從 /api/db 載入，寫入時先更新畫面（樂觀更新）再送到後端。
@@ -214,7 +215,8 @@ export interface DashboardStats {
 export const statsApi = { get: () => api<DashboardStats>("/api/stats") };
 
 /* ---------------- 目前登入的使用者 ---------------- */
-export type Me = { id: string; email: string; name: string; role: "admin" | "user" };
+/** pages：這個帳號看得到的頁面（管理者是全部） */
+export type Me = { id: string; email: string; name: string; role: "admin" | "user"; pages: PageKey[] };
 let me: Me | null = null;
 let meLoading = false;
 const meListeners = new Set<() => void>();
@@ -244,6 +246,12 @@ export function useMe(): Me | null {
 
 /** 只有管理者可以新增、修改、刪除；一般使用者只能看 */
 export const useCanEdit = () => useMe()?.role === "admin";
+
+/** 看不看得到某個頁面（後台「頁面權限」設定）；還沒載入完先當作看得到，避免畫面閃動 */
+export function useCanSee() {
+  const me = useMe();
+  return (page: PageKey) => !me || me.role === "admin" || (me.pages ?? []).includes(page);
+}
 
 export async function logout() {
   await fetch("/api/auth/logout", { method: "POST" });

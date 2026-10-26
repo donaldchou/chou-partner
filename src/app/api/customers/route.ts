@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { handleError, readJson } from "@/lib/api";
-import { requireUser } from "@/lib/auth";
+import { requirePage } from "@/lib/access";
 import { requireEditor } from "@/lib/unlock";
 import { createCustomer, customerCounts, listCustomers } from "@/lib/customers-repo";
 
@@ -10,7 +10,7 @@ import { createCustomer, customerCounts, listCustomers } from "@/lib/customers-r
  */
 export async function GET(req: NextRequest) {
   try {
-    await requireUser();
+    await requirePage("customers");
     const params = req.nextUrl.searchParams;
     const [list, counts] = await Promise.all([
       listCustomers(params),

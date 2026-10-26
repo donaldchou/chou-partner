@@ -13,6 +13,8 @@ export type PublicUser = {
   active: boolean;
   lastLoginAt: string | null;
   createdAt: string;
+  /** 這個帳號另外看不到的頁面（只對一般使用者有效） */
+  hiddenPages?: string[];
 };
 
 /** 給前端的使用者資料（拿掉密碼雜湊） */

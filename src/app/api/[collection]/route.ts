@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { HttpError, handleError, readJson } from "@/lib/api";
-import { requireUser } from "@/lib/auth";
+import { requirePage } from "@/lib/access";
+import { COLLECTION_PAGES, PAGE_KEYS } from "@/lib/page-access";
 import { requireEditor } from "@/lib/unlock";
 import { isCollection } from "@/lib/collections";
 import { createDoc, listDocs } from "@/lib/repo";
@@ -16,8 +17,9 @@ async function nameOf(ctx: Ctx) {
 /** GET /api/<collection>?q=關鍵字&from=YYYY-MM-DD&to=YYYY-MM-DD&欄位=值 */
 export async function GET(req: NextRequest, ctx: Ctx) {
   try {
-    await requireUser();
-    return NextResponse.json(await listDocs(await nameOf(ctx), req.nextUrl.searchParams));
+    const name = await nameOf(ctx);
+    await requirePage(...(COLLECTION_PAGES[name] ?? PAGE_KEYS));
+    return NextResponse.json(await listDocs(name, req.nextUrl.searchParams));
   } catch (err) {
     return handleError(err);
   }
