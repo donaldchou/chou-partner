@@ -2,12 +2,12 @@ import { createHmac } from "node:crypto";
 import { HttpError } from "./api";
 
 /**
- * ll3 主機的檔案 API（http://www.ll3.com.tw/platform/file_api_partner.asp，原始碼在 chou-suda-print\platform_change_code，
+ * ll3 主機的檔案 API（https://www.ll3.com.tw/platform/file_api_partner.asp，2026-11-04 起主機有 SSL，原始碼在 chou-suda-print\platform_change_code，
  * 與 chou-platform 的 file_api.asp 相同，只有金鑰和資料夾不同）。
  * 檔案存在主機的 /platform/chou_partner/<folder>/<name>，MongoDB 存 "ll3:<folder>/<name>"。
  * 每個請求都用共用金鑰簽章：HMAC-SHA256(LL3_FILE_KEY, a|p|id|n|size|ts)，ts 是 UTC 秒數，10 分鐘內有效。
  */
-export const LL3_FILE_API = "http://www.ll3.com.tw/platform/file_api_partner.asp";
+export const LL3_FILE_API = "https://www.ll3.com.tw/platform/file_api_partner.asp";
 
 /** 主機的 ASP 一次只收約 200KB，檔案要切成小塊送 */
 export const LL3_CHUNK = 150_000;
