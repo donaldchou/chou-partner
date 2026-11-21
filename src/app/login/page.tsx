@@ -1,6 +1,6 @@
 "use client";
 
-import { Citrus, LogIn } from "lucide-react";
+import { LogIn } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { Button, Field, Input } from "@/components/ui";
@@ -55,9 +55,9 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm rounded-2xl border border-slate-200/80 bg-white p-7 shadow-xl shadow-slate-200/60">
         <div className="mb-6 flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-accent-400 to-accent-500 text-white shadow-md shadow-accent-500/30">
-            <Citrus size={26} />
-          </span>
+          {/* 平台自己的分頁圖示（不用登入也讀得到） */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.svg" width={48} height={48} alt="" className="block rounded-xl shadow-md shadow-slate-400/30" />
           <div>
             <h1 className="text-xl font-bold text-slate-800">CHOU 農場平台</h1>
             <p className="text-sm text-slate-400">客戶管理系統</p>
