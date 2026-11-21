@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ChevronsLeft,
   ChevronsRight,
-  Citrus,
   FilePlus2,
   FileUp,
   ReceiptText,
@@ -285,9 +284,11 @@ function BrandButton({ mini, onExpand }: { mini: boolean; onExpand: () => void }
       onClick={() => (mini ? onExpand() : toggleAll(groups))}
       title={label}
       aria-label={label}
-      className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-gradient-to-br from-accent-400 to-accent-500 text-white shadow-md shadow-black/20 transition hover:brightness-110"
+      className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl shadow-md shadow-black/20 transition hover:brightness-110"
     >
-      <Citrus size={24} />
+      {/* 平台自己的分頁圖示（favicon） */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/platforms/chou-partner.svg" width={44} height={44} alt="" className="block" />
     </button>
   );
 }
@@ -363,7 +364,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <button onClick={() => setOpen(true)} aria-label="開啟選單" className="text-slate-700">
             <Menu size={24} />
           </button>
-          <Citrus size={20} className="text-accent-500" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/platforms/chou-partner.svg" width={24} height={24} alt="" className="block" />
           <span className="text-lg font-semibold text-slate-800">CHOU 農場平台</span>
         </header>
         {/* 內容用滿寬度，左右只留少量空白 */}
