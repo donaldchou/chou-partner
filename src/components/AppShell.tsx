@@ -35,6 +35,7 @@ import { logout, reload, useDBStatus, useMe, type Me } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Loading } from "./ui";
 import { CodePrompt } from "./unlock";
+import { PlatformLinks } from "./PlatformLinks";
 
 const NAV = [
   { group: "總覽", items: [{ href: "/", label: "儀表板", icon: LayoutDashboard }] },
@@ -317,6 +318,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </Suspense>
       </div>
       <div className="border-t border-white/10 p-3">
+        <PlatformLinks current="chou-partner" mini={mini} captionClass="text-brand-200/70" />
         <UserBlock mini={mini} />
         <DBIndicator mini={mini} />
       </div>
